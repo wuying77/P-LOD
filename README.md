@@ -45,30 +45,25 @@ P-LOD（渐进式强纠缠点阵与弱纠缠涌现编码）是一种面向结构
 
 ---
 
-## Quick Example (Level 1 Humanoid – 6 points)
+## Examples
 
-```json
-{
-  "format": "P-LOD",
-  "version": "0.1",
-  "dimension": 3,
-  "levels": {
-    "1": [
-      { "id": "H", "position": [0.0, 1.6, 0.0], "rgb": [255, 220, 180], "type": "semi-hollow", "level": 1 },
-      { "id": "T", "position": [0.0, 0.9, 0.0], "rgb": [30, 144, 255], "type": "hollow", "level": 1 },
-      { "id": "L_H", "position": [-0.65, 0.45, 0.0], "rgb": [255, 220, 180], "type": "end", "level": 1 },
-      { "id": "R_H", "position": [0.65, 0.45, 0.0], "rgb": [255, 220, 180], "type": "end", "level": 1 },
-      { "id": "L_F", "position": [-0.2, 0.0, 0.0], "rgb": [50, 50, 50], "type": "end", "level": 1 },
-      { "id": "R_F", "position": [0.2, 0.0, 0.0], "rgb": [50, 50, 50], "type": "end", "level": 1 }
-    ]
-  },
-  "topology": [
-    ["H", "T"], ["T", "L_H"], ["T", "R_H"], ["T", "L_F"], ["T", "R_F"]
-  ]
-}
-```
+### 1. 3D Humanoid (Level 1 – 6 points)
 
-More examples: [examples/](examples/)
+See [`examples/humanoid_level1.json`](examples/humanoid_level1.json) and [`examples/humanoid_level2.json`](examples/humanoid_level2.json).
+
+### 2. 2D Cosmic Meditation Image (real illustration example)
+
+This is a full-color cosmic meditation illustration used as a practical 2D test case.
+
+- **Level 1** ([`examples/cosmic_meditation_level1.json`](examples/cosmic_meditation_level1.json))  
+  ~16 key points: figure silhouette anchors, energy-stream path, three main ring radii, a few major orbs.  
+  Goal: keep identity and major composition. Color is heavily simplified. Background nebula & fine particles are treated as pure weak entanglement (procedural).
+
+- **Level 2** ([`examples/cosmic_meditation_level2.json`](examples/cosmic_meditation_level2.json))  
+  Adds rainbow color segmentation points for the rising energy stream + better orb / glow colors.  
+  Target: roughly **80% perceptual fidelity** while the file remains extremely small.
+
+You can place the original illustration as `examples/cosmic_meditation.png` (or any path you prefer) for side-by-side comparison.
 
 ---
 
@@ -94,10 +89,11 @@ P-LOD/
 ├── LICENSE
 ├── docs/
 │   └── whitepaper_zh.md
-├── examples/
-│   ├── humanoid_level1.json
-│   └── humanoid_level2.json
-└── (more to come)
+└── examples/
+    ├── humanoid_level1.json
+    ├── humanoid_level2.json
+    ├── cosmic_meditation_level1.json
+    └── cosmic_meditation_level2.json
 ```
 
 ---
