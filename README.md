@@ -49,8 +49,9 @@ P-LOD（渐进式强纠缠点阵与弱纠缠涌现编码）是一种面向结构
 
 ### 1. 3D Humanoid
 
-- Level 1 (6 points): [`examples/humanoid_level1.json`](examples/humanoid_level1.json)
-- Level 2 (with major joints): [`examples/humanoid_level2.json`](examples/humanoid_level2.json)
+- **Level 1** (6 points): [`examples/humanoid_level1.json`](examples/humanoid_level1.json)
+- **Level 2** (major joints): [`examples/humanoid_level2.json`](examples/humanoid_level2.json)
+- **Level 3** (neck + torso auxiliaries): [`examples/humanoid_level3.json`](examples/humanoid_level3.json)
 
 ### 2. 2D Cosmic Meditation Image
 
@@ -65,6 +66,9 @@ This full-color illustration is used as a practical 2D test case for P-LOD.
 - **Level 2** → [`examples/cosmic_meditation_level2.json`](examples/cosmic_meditation_level2.json)  
   Adds rainbow color segmentation for the rising energy stream + better orb/glow colors.  
   Target: roughly **80% perceptual fidelity** while remaining extremely small.
+
+- **Level 3** → [`examples/cosmic_meditation_level3.json`](examples/cosmic_meditation_level3.json)  
+  Adds intermediate energy-stream points, extra ring radii, shoulder anchors and more orbs for smoother transitions.
 
 ---
 
@@ -93,9 +97,11 @@ P-LOD/
 └── examples/
     ├── humanoid_level1.json
     ├── humanoid_level2.json
+    ├── humanoid_level3.json
     ├── cosmic_meditation.png
     ├── cosmic_meditation_level1.json
-    └── cosmic_meditation_level2.json
+    ├── cosmic_meditation_level2.json
+    └── cosmic_meditation_level3.json
 ```
 
 ---
