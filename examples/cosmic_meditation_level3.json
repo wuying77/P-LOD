@@ -1,0 +1,54 @@
+{
+  "format": "P-LOD",
+  "version": "0.1",
+  "dimension": 2,
+  "description": "Level 3 of the cosmic meditation image – adds local transition points, extra energy-stream controls, and denser orb placement for smoother appearance",
+  "source_image": "cosmic_meditation.png",
+  "levels": {
+    "1": [
+      { "id": "C",  "position": [0.50, 0.62], "rgb": [20, 30, 80],    "type": "solid",   "level": 1 },
+      { "id": "H",  "position": [0.50, 0.38], "rgb": [180, 200, 255], "type": "emitter", "level": 1 },
+      { "id": "B1", "position": [0.42, 0.72], "rgb": [30, 40, 90],    "type": "end",     "level": 1 },
+      { "id": "B2", "position": [0.58, 0.72], "rgb": [30, 40, 90],    "type": "end",     "level": 1 },
+      { "id": "B3", "position": [0.38, 0.58], "rgb": [40, 50, 100],   "type": "end",     "level": 1 },
+      { "id": "B4", "position": [0.62, 0.58], "rgb": [40, 50, 100],   "type": "end",     "level": 1 },
+      { "id": "R1", "position": [0.50, 0.62], "rgb": [0, 200, 255],   "type": "control", "level": 1, "params": { "radius": 0.12 } },
+      { "id": "R2", "position": [0.50, 0.62], "rgb": [80, 120, 255],  "type": "control", "level": 1, "params": { "radius": 0.28 } },
+      { "id": "R3", "position": [0.50, 0.62], "rgb": [160, 80, 255],  "type": "control", "level": 1, "params": { "radius": 0.45 } }
+    ],
+    "2": [
+      { "id": "E_cyan",   "position": [0.50, 0.32], "rgb": [0, 220, 255],   "type": "control", "level": 2 },
+      { "id": "E_green",  "position": [0.51, 0.24], "rgb": [80, 255, 160],  "type": "control", "level": 2 },
+      { "id": "E_yellow", "position": [0.53, 0.16], "rgb": [255, 220, 60],  "type": "control", "level": 2 },
+      { "id": "E_orange", "position": [0.55, 0.11], "rgb": [255, 140, 50],  "type": "control", "level": 2 },
+      { "id": "E_pink",   "position": [0.57, 0.07], "rgb": [255, 100, 180], "type": "control", "level": 2 },
+      { "id": "glow_head","position": [0.50, 0.40], "rgb": [160, 200, 255], "type": "control", "level": 2 },
+      { "id": "O1", "position": [0.22, 0.55], "rgb": [80, 200, 255],  "type": "emitter", "level": 2 },
+      { "id": "O2", "position": [0.78, 0.50], "rgb": [180, 100, 255], "type": "emitter", "level": 2 },
+      { "id": "O3", "position": [0.30, 0.78], "rgb": [200, 140, 255], "type": "emitter", "level": 2 },
+      { "id": "O4", "position": [0.70, 0.75], "rgb": [100, 220, 255], "type": "emitter", "level": 2 },
+      { "id": "O5", "position": [0.15, 0.68], "rgb": [150, 180, 255], "type": "emitter", "level": 2 },
+      { "id": "O6", "position": [0.85, 0.65], "rgb": [220, 160, 255], "type": "emitter", "level": 2 }
+    ],
+    "3": [
+      { "id": "E_mid1", "position": [0.505, 0.28], "rgb": [40, 240, 220],  "type": "control", "level": 3, "params": { "role": "energy_transition" } },
+      { "id": "E_mid2", "position": [0.52, 0.20],  "rgb": [180, 255, 100], "type": "control", "level": 3, "params": { "role": "energy_transition" } },
+      { "id": "E_mid3", "position": [0.54, 0.13],  "rgb": [255, 180, 40],  "type": "control", "level": 3, "params": { "role": "energy_transition" } },
+      { "id": "R1b",    "position": [0.50, 0.62],  "rgb": [0, 220, 240],   "type": "control", "level": 3, "params": { "radius": 0.18, "role": "ring_fill" } },
+      { "id": "R2b",    "position": [0.50, 0.62],  "rgb": [100, 140, 255], "type": "control", "level": 3, "params": { "radius": 0.36, "role": "ring_fill" } },
+      { "id": "shoulder_L", "position": [0.40, 0.52], "rgb": [50, 60, 120], "type": "control", "level": 3 },
+      { "id": "shoulder_R", "position": [0.60, 0.52], "rgb": [50, 60, 120], "type": "control", "level": 3 },
+      { "id": "O7", "position": [0.12, 0.48], "rgb": [120, 160, 255], "type": "emitter", "level": 3 },
+      { "id": "O8", "position": [0.88, 0.52], "rgb": [200, 140, 255], "type": "emitter", "level": 3 },
+      { "id": "O9", "position": [0.45, 0.85], "rgb": [160, 120, 255], "type": "emitter", "level": 3 },
+      { "id": "O10","position": [0.58, 0.82], "rgb": [100, 200, 255], "type": "emitter", "level": 3 }
+    ]
+  },
+  "topology": [
+    ["C", "H"], ["C", "B1"], ["C", "B2"], ["C", "B3"], ["C", "B4"],
+    ["H", "E_cyan"], ["E_cyan", "E_mid1"], ["E_mid1", "E_green"],
+    ["E_green", "E_mid2"], ["E_mid2", "E_yellow"],
+    ["E_yellow", "E_mid3"], ["E_mid3", "E_orange"], ["E_orange", "E_pink"]
+  ],
+  "notes": "Level 3 adds intermediate energy-stream points, extra ring radii, shoulder anchors and more orbs for smoother visual transitions. Fine particle fields and nebula texture remain pure weak entanglement."
+}
