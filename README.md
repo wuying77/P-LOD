@@ -5,7 +5,9 @@
 An open-source hierarchical skeleton-based data compression and emergence framework.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Status](https://img.shields.io/badge/status-concept%20v0.1-blue)]()
+[![Version](https://img.shields.io/badge/version-v0.1.0-blue.svg)]()
+[![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)]()
+[![Status](https://img.shields.io/badge/status-concept%20v0.1-lightgrey.svg)]()
 
 ---
 
@@ -51,7 +53,7 @@ Run the minimal 3D skeleton visualization demo in Python:
 
 ```bash
 cd examples
-pip install matplotlib
+pip install -r requirements.txt
 python parse_plod.py
 ```
 
@@ -175,6 +177,7 @@ P-LOD/
 ├── docs/
 │   └── whitepaper_zh.md
 └── examples/
+    ├── requirements.txt           # pip install -r requirements.txt
     ├── parse_plod.py              # Quick Start 3D demo
     ├── humanoid_level1.json
     ├── humanoid_level2.json
