@@ -1,0 +1,59 @@
+{
+  "format": "P-LOD",
+  "version": "0.1",
+  "dimension": 3,
+  "description": "Minimal Level 1 humanoid skeleton (6 points)",
+  "levels": {
+    "1": [
+      {
+        "id": "H",
+        "position": [0.0, 1.6, 0.0],
+        "rgb": [255, 220, 180],
+        "type": "semi-hollow",
+        "level": 1
+      },
+      {
+        "id": "T",
+        "position": [0.0, 0.9, 0.0],
+        "rgb": [30, 144, 255],
+        "type": "hollow",
+        "level": 1
+      },
+      {
+        "id": "L_H",
+        "position": [-0.65, 0.45, 0.0],
+        "rgb": [255, 220, 180],
+        "type": "end",
+        "level": 1
+      },
+      {
+        "id": "R_H",
+        "position": [0.65, 0.45, 0.0],
+        "rgb": [255, 220, 180],
+        "type": "end",
+        "level": 1
+      },
+      {
+        "id": "L_F",
+        "position": [-0.2, 0.0, 0.0],
+        "rgb": [50, 50, 50],
+        "type": "end",
+        "level": 1
+      },
+      {
+        "id": "R_F",
+        "position": [0.2, 0.0, 0.0],
+        "rgb": [50, 50, 50],
+        "type": "end",
+        "level": 1
+      }
+    ]
+  },
+  "topology": [
+    ["H", "T"],
+    ["T", "L_H"],
+    ["T", "R_H"],
+    ["T", "L_F"],
+    ["T", "R_F"]
+  ]
+}

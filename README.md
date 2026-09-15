@@ -1,45 +1,51 @@
-# P-LOD: Progressive Strong-Entanglement Point Array with Weak-Entanglement Emergence Encoding
+# P-LOD
 
-**An Open-Source Hierarchical Skeleton-Based Data Compression and Emergence Framework**
+**Progressive Strong-Entanglement Point Array with Weak-Entanglement Emergence Encoding**
+
+An open-source hierarchical skeleton-based data compression and emergence framework.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Status](https://img.shields.io/badge/status-concept%20v0.1-blue)]()
+
+---
+
+## What is P-LOD?
+
+P-LOD stores only the **minimal strong-entanglement skeleton** (key points + topology + discrete state labels) and regenerates the remaining details (**weak entanglement**) at runtime through deterministic / procedural rules.
+
+Three progressive levels:
+
+| Level | Content | Typical size | Goal |
+|-------|---------|--------------|------|
+| **Level 1** | Extreme structural skeleton | very few points | Maximum compression, identity preserved |
+| **Level 2** | + key attributes & color control points | ~30–40 points | ~80% perceptual fidelity |
+| **Level 3** | + local smoothing / transition points | more points | Higher surface continuity |
+
+Applicable to 2D images, 3D models, point clouds, and other data with clear topological structure.
 
 ---
 
 ## English Abstract
 
-We present **P-LOD** (Progressive Strong-Entanglement Point Array with Weak-Entanglement Emergence Encoding), a hierarchical data representation and compression framework for structured and semi-structured data. The core idea is to identify the minimal set of points that most critically determine the identity, topology, and primary visual or semantic features of the data—termed the *strong-entanglement skeleton*—and store only this skeleton together with discrete state labels and essential attributes. All remaining details (*weak entanglement*) are discarded at storage time and regenerated at runtime through deterministic or procedural rules.
-
-Three progressive levels are defined:
-- **Level 1**: Extreme structural skeleton.
-- **Level 2**: Key attributes and color control points.
-- **Level 3**: Local smoothing and transition points.
+We present **P-LOD** (Progressive Strong-Entanglement Point Array with Weak-Entanglement Emergence Encoding), a hierarchical data representation and compression framework. The core idea is to identify the minimal set of points that most critically determine the identity, topology, and primary visual or semantic features of the data—termed the *strong-entanglement skeleton*—and store only this skeleton together with discrete state labels and essential attributes. All remaining details (*weak entanglement*) are discarded at storage time and regenerated at runtime through deterministic or procedural rules.
 
 This design enables a tunable trade-off between storage size and reconstruction fidelity. The proposal is released as prior art under the MIT License for free research, implementation, and improvement by the global community.
 
-**Keywords**: `data compression`, `level of detail`, `skeleton extraction`, `procedural generation`, `hierarchical representation`, `point-based modeling`, `progressive encoding`
+**Keywords**: data compression, level of detail, skeleton extraction, procedural generation, hierarchical representation, point-based modeling, progressive encoding
 
 ---
 
-## 渐进式强纠缠点阵与弱纠缠涌现编码（P-LOD）技术白皮书
+## 中文简介
 
-### 摘要
-本文提出一种面向结构化与半结构化数据的渐进式压缩与表示框架——渐进式强纠缠点阵与弱纠缠涌现编码（P-LOD）。核心思想是：将数据中对整体可识别性与可重构性贡献最高的最小点集及其拓扑与关键属性定义为“强纠缠骨架”，在存储阶段仅保留该骨架；其余细节（弱纠缠）在调用/渲染阶段由确定性或程序化规则实时涌现生成。通过定义 Level 1（极致结构）、Level 2（关键属性与色彩）、Level 3（局域平滑与过渡）的层级增量方式，实现存储体积与重构精度之间的可调节平衡。
+P-LOD（渐进式强纠缠点阵与弱纠缠涌现编码）是一种面向结构化与半结构化数据的层级压缩与表示框架。
 
----
+核心思路：只永久存储对整体可识别性与可重构性贡献最高的最小点集及其拓扑与关键属性（强纠缠骨架）；其余细节（弱纠缠）在调用时由规则实时涌现生成。通过 Level 1 → 2 → 3 的渐进方式，在极小存储体积与可接受还原度之间取得平衡。
 
-### 1. 核心定义
-
-- **强纠缠（Strong Entanglement）**：对数据整体可识别性、拓扑完整性与主要特征贡献最高的最小点集合，及其拓扑与关键属性。
-- **弱纠缠（Weak Entanglement）**：可由强纠缠骨架 + 预设生成规则推导或程序化生成的细节，在存储阶段剔除，调用时涌现。
-- **层级点阵（Progressive Point Array）**：
-  - **Level 1**：仅保留决定数据基本身份与拓扑的最少关键点。
-  - **Level 2**：增加主要属性点（关节、颜色控制点），提升可识别度与色彩还原。
-  - **Level 3**：增加局域平滑与过渡点，提升表面连续性与细节自然度。
+完整技术说明见：[docs/whitepaper_zh.md](docs/whitepaper_zh.md)
 
 ---
 
-### 2. 数据结构设计（JSON 示例）
-
-#### 极简 Level 1 文件示例（3D 人形，仅 6 个点，体积 < 1 KB）
+## Quick Example (Level 1 Humanoid – 6 points)
 
 ```json
 {
@@ -60,3 +66,58 @@ This design enables a tunable trade-off between storage size and reconstruction 
     ["H", "T"], ["T", "L_H"], ["T", "R_H"], ["T", "L_F"], ["T", "R_F"]
   ]
 }
+```
+
+More examples: [examples/](examples/)
+
+---
+
+## Point Fields
+
+| Field | Description |
+|-------|-------------|
+| `id` | Unique point identifier |
+| `position` | 2D or 3D coordinates |
+| `rgb` | Color |
+| `type` | Discrete state label (`solid` / `hollow` / `semi-hollow` / `joint` / `end` / `control` / `emitter` …) |
+| `level` | Lowest level this point belongs to |
+| `params` | Optional generation parameters |
+| `connections` | Topology links |
+
+---
+
+## Repository Structure
+
+```
+P-LOD/
+├── README.md
+├── LICENSE
+├── docs/
+│   └── whitepaper_zh.md
+├── examples/
+│   ├── humanoid_level1.json
+│   └── humanoid_level2.json
+└── (more to come)
+```
+
+---
+
+## Status & Roadmap
+
+Current status: **Concept / Prior Art v0.1**
+
+Open problems:
+- Automatic extraction of strong-entanglement points
+- Objective quality metrics
+- High-entropy data handling
+- Reference implementations (CPU / GPU / shader)
+
+Contributions, discussions, and implementations are welcome.
+
+---
+
+## License
+
+MIT License © 2026 wuying77 & P-LOD Contributors
+
+This work is released as prior art. Anyone may freely research, implement, modify, and distribute it.
