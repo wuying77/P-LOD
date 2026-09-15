@@ -70,6 +70,19 @@ This full-color illustration is used as a practical 2D test case for P-LOD.
 - **Level 3** → [`examples/cosmic_meditation_level3.json`](examples/cosmic_meditation_level3.json)  
   Adds intermediate energy-stream points, extra ring radii, shoulder anchors and more orbs for smoother transitions.
 
+#### Size Comparison (this image)
+
+| Version | File | Size | vs Original |
+|---------|------|------|-------------|
+| **Original (uncompressed PNG)** | `cosmic_meditation.png` | **5.48 MB** (5,743,332 bytes) | 1× |
+| **P-LOD Level 1** | `cosmic_meditation_level1.json` | **2.6 KB** (2,623 bytes) | **≈ 2,190× smaller** |
+| **P-LOD Level 2** | `cosmic_meditation_level2.json` | **3.2 KB** (3,310 bytes) | **≈ 1,735× smaller** |
+| **P-LOD Level 3** | `cosmic_meditation_level3.json` | **4.4 KB** (4,532 bytes) | **≈ 1,267× smaller** |
+
+> Note: These sizes are the stored skeleton data only. A real implementation still needs a small emergence/renderer (shader or procedural code) to reconstruct the image at runtime. Even so, the persistent storage footprint drops by three orders of magnitude.
+
+For reference, a typical high-quality JPEG of the same image is usually still several hundred KB to over 1 MB — far larger than the P-LOD skeletons above.
+
 ---
 
 ## Point Fields
