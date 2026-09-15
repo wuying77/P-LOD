@@ -45,6 +45,20 @@ P-LOD（渐进式强纠缠点阵与弱纠缠涌现编码）是一种面向结构
 
 ---
 
+## Quick Start / Demo
+
+Run the minimal 3D skeleton visualization demo in Python:
+
+```bash
+cd examples
+pip install matplotlib
+python parse_plod.py
+```
+
+This loads `humanoid_level1.json` and renders the 6-point strong-entanglement skeleton in a 3D viewport.
+
+---
+
 ## Examples
 
 ### 1. 3D Humanoid
@@ -140,6 +154,7 @@ P-LOD/
 ├── docs/
 │   └── whitepaper_zh.md
 └── examples/
+    ├── parse_plod.py              # Quick Start 3D demo
     ├── humanoid_level1.json
     ├── humanoid_level2.json
     ├── humanoid_level3.json
