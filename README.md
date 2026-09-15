@@ -21,7 +21,7 @@ Three progressive levels:
 | **Level 2** | + key attributes & color control points | ~30–40 points | ~80% perceptual fidelity |
 | **Level 3** | + local smoothing / transition points | more points | Higher surface continuity |
 
-Applicable to 2D images, 3D models, point clouds, **text / books**, and other data with clear topological structure.
+Applicable to 2D images, 3D models, point clouds, **text / books**, **video**, and other data with clear topological structure.
 
 ---
 
@@ -131,12 +131,33 @@ For a long novel like *Journey to the West*, Level 1 can be roughly **100× smal
 
 ---
 
+### 4. Video (1-hour movie example)
+
+The same logic extends to video: store only the strong temporal-spatial skeleton (key scene anchors, major character trajectories, critical keyframes, essential audio cues). Intermediate frames and fine visual details are treated as weak entanglement and generated on playback.
+
+#### Illustrative comparison for a typical 1-hour movie
+
+| Version | Approx. Size | Notes |
+|---------|--------------|-------|
+| Common high-quality 1080p encode (H.264/H.265) | **≈ 1.5–2.5 GB** | Everyday streaming / download size |
+| High-bitrate / 4K version | **≈ 5–12 GB** | Higher fidelity masters |
+| **P-LOD Level 1** | **≈ 5–20 MB** | Extreme skeleton: key scene cuts, main character motion paths, core audio anchors |
+| **P-LOD Level 2** | **≈ 30–80 MB** | + more keyframes, color/lighting anchors, important motion segments |
+| **P-LOD Level 3** | **≈ 100–300 MB** | Denser temporal anchors for smoother reconstruction, still far below normal encodes |
+
+> These video numbers are **conceptual estimates** consistent with the P-LOD philosophy (skeleton only + runtime emergence). Real implementation would require a strong generative / interpolation backend. Even so, the persistent storage reduction versus conventional video files is potentially two to three orders of magnitude.
+
+**Takeaway**  
+A 1-hour movie that normally occupies 2 GB could, under a mature P-LOD approach, live as a few dozen megabytes of strong-entanglement skeleton while still being reconstructible at useful quality when played.
+
+---
+
 ## Point Fields
 
 | Field | Description |
 |-------|-------------|
 | `id` | Unique point identifier |
-| `position` | 2D or 3D coordinates (or sequential index for text) |
+| `position` | 2D or 3D coordinates (or sequential index for text/video) |
 | `rgb` | Color (or other attributes for non-image data) |
 | `type` | Discrete state label (`solid` / `hollow` / `semi-hollow` / `joint` / `end` / `control` / `emitter` …) |
 | `level` | Lowest level this point belongs to |
@@ -175,7 +196,7 @@ Open problems:
 - Objective quality metrics
 - High-entropy data handling
 - Reference implementations (CPU / GPU / shader)
-- Concrete text/book skeleton schemas and emergence rules
+- Concrete text/book/video skeleton schemas and emergence rules
 
 Contributions, discussions, and implementations are welcome.
 
