@@ -21,7 +21,7 @@ Three progressive levels:
 | **Level 2** | + key attributes & color control points | ~30–40 points | ~80% perceptual fidelity |
 | **Level 3** | + local smoothing / transition points | more points | Higher surface continuity |
 
-Applicable to 2D images, 3D models, point clouds, and other data with clear topological structure.
+Applicable to 2D images, 3D models, point clouds, **text / books**, and other data with clear topological structure.
 
 ---
 
@@ -85,13 +85,45 @@ For reference, a typical high-quality JPEG of the same image is usually still se
 
 ---
 
+### 3. Text / Books
+
+P-LOD works the same way on text: only the **strong-entanglement skeleton** is stored (structure, key characters, core plot anchors, essential sentences). The rest is treated as weak entanglement and can be regenerated or expanded on demand.
+
+#### English classic — *Alice’s Adventures in Wonderland*
+
+| Version | Approx. Size | Notes |
+|---------|--------------|-------|
+| Full plain text | **≈ 160–180 KB** | Complete original wording |
+| Typical gzip | **≈ 55–70 KB** | Still stores all content |
+| **P-LOD Level 1** | **≈ 3–5 KB** | Chapter structure + main characters + core plot anchors per chapter |
+| **P-LOD Level 2** | **≈ 8–15 KB** | + key dialogues and important scenes |
+| **P-LOD Level 3** | **≈ 20–35 KB** | More original sentences, still far smaller than full text |
+
+#### Chinese classic — 《西游记》(Journey to the West)
+
+| Version | Approx. Size | Notes |
+|---------|--------------|-------|
+| Full plain text | **≈ 1.8–2.5 MB** | ~100 chapters, complete novel |
+| Typical gzip | **≈ 600–900 KB** | Full content, only encoding compression |
+| **P-LOD Level 1** | **≈ 15–30 KB** | Chapter titles + main character relations + core plot anchor per chapter |
+| **P-LOD Level 2** | **≈ 40–80 KB** | + key events, important dialogues, major poems |
+| **P-LOD Level 3** | **≈ 100–200 KB** | Richer readable version, still dramatically smaller than the original |
+
+**Key difference**  
+- Ordinary compression (gzip etc.) keeps **every word** and only encodes it more tightly.  
+- P-LOD **does not store** most of the words at all — only the strong skeleton. The rest can emerge when needed.
+
+For a long novel like *Journey to the West*, Level 1 can be roughly **100× smaller** than the full text and still an order of magnitude smaller than gzip.
+
+---
+
 ## Point Fields
 
 | Field | Description |
 |-------|-------------|
 | `id` | Unique point identifier |
-| `position` | 2D or 3D coordinates |
-| `rgb` | Color |
+| `position` | 2D or 3D coordinates (or sequential index for text) |
+| `rgb` | Color (or other attributes for non-image data) |
 | `type` | Discrete state label (`solid` / `hollow` / `semi-hollow` / `joint` / `end` / `control` / `emitter` …) |
 | `level` | Lowest level this point belongs to |
 | `params` | Optional generation parameters |
@@ -128,6 +160,7 @@ Open problems:
 - Objective quality metrics
 - High-entropy data handling
 - Reference implementations (CPU / GPU / shader)
+- Concrete text/book skeleton schemas and emergence rules
 
 Contributions, discussions, and implementations are welcome.
 
