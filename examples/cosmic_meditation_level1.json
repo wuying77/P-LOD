@@ -1,0 +1,32 @@
+{
+  "format": "P-LOD",
+  "version": "0.1",
+  "dimension": 2,
+  "description": "Level 1 extreme skeleton of the cosmic meditation image. Structure only, color heavily simplified.",
+  "source_image": "cosmic_meditation.png (user-provided illustration)",
+  "levels": {
+    "1": [
+      { "id": "C",  "position": [0.50, 0.62], "rgb": [20, 30, 80],   "type": "solid",   "level": 1, "params": { "role": "figure_center" } },
+      { "id": "H",  "position": [0.50, 0.38], "rgb": [180, 200, 255], "type": "emitter", "level": 1, "params": { "role": "crown_energy_origin" } },
+      { "id": "B1", "position": [0.42, 0.72], "rgb": [30, 40, 90],   "type": "end",     "level": 1, "params": { "role": "left_knee" } },
+      { "id": "B2", "position": [0.58, 0.72], "rgb": [30, 40, 90],   "type": "end",     "level": 1, "params": { "role": "right_knee" } },
+      { "id": "B3", "position": [0.38, 0.58], "rgb": [40, 50, 100],  "type": "end",     "level": 1, "params": { "role": "left_hand" } },
+      { "id": "B4", "position": [0.62, 0.58], "rgb": [40, 50, 100],  "type": "end",     "level": 1, "params": { "role": "right_hand" } },
+      { "id": "E1", "position": [0.50, 0.28], "rgb": [80, 180, 255],  "type": "control", "level": 1 },
+      { "id": "E2", "position": [0.52, 0.18], "rgb": [120, 255, 180], "type": "control", "level": 1 },
+      { "id": "E3", "position": [0.55, 0.10], "rgb": [255, 180, 80],  "type": "control", "level": 1 },
+      { "id": "R1", "position": [0.50, 0.62], "rgb": [0, 200, 255],   "type": "control", "level": 1, "params": { "role": "inner_ring", "radius": 0.12 } },
+      { "id": "R2", "position": [0.50, 0.62], "rgb": [80, 120, 255],  "type": "control", "level": 1, "params": { "role": "mid_ring",   "radius": 0.28 } },
+      { "id": "R3", "position": [0.50, 0.62], "rgb": [160, 80, 255],  "type": "control", "level": 1, "params": { "role": "outer_ring", "radius": 0.45 } },
+      { "id": "O1", "position": [0.22, 0.55], "rgb": [100, 200, 255], "type": "emitter", "level": 1 },
+      { "id": "O2", "position": [0.78, 0.50], "rgb": [180, 120, 255], "type": "emitter", "level": 1 },
+      { "id": "O3", "position": [0.30, 0.78], "rgb": [200, 150, 255], "type": "emitter", "level": 1 },
+      { "id": "O4", "position": [0.70, 0.75], "rgb": [120, 220, 255], "type": "emitter", "level": 1 }
+    ]
+  },
+  "topology": [
+    ["C", "H"], ["C", "B1"], ["C", "B2"], ["C", "B3"], ["C", "B4"],
+    ["H", "E1"], ["E1", "E2"], ["E2", "E3"]
+  ],
+  "notes": "Level 1 keeps only identity + major energy flow + three ring radii + a few key orbs. Background nebula and fine particles are pure weak entanglement (procedural)."
+}
