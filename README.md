@@ -39,7 +39,14 @@ One-page summary of the framework:
 - Three progressive levels
 - Cross-media compression examples (image / text / video)
 
-> Place the infographic file at `docs/plod_architecture.png` if it is not yet in the repo.
+> Upload the infographic to `docs/plod_architecture.png` if it is not yet in the repo.
+
+### Mind map
+
+- **Markdown (searchable):** [docs/mindmap.md](docs/mindmap.md)
+- **Visual (optional):** ![P-LOD mind map](docs/plod_mindmap.png)
+
+> Upload the Notebook mind-map export to `docs/plod_mindmap.png` (or `.svg`) if you want the image embedded.
 
 ---
 
@@ -59,7 +66,8 @@ P-LOD（渐进式强纠缠点阵与弱纠缠涌现编码）是一种面向结构
 
 核心思路：只永久存储对整体可识别性与可重构性贡献最高的最小点集及其拓扑与关键属性（强纠缠骨架）；其余细节（弱纠缠）在调用时由规则实时涌现生成。通过 Level 1 → 2 → 3 的渐进方式，在极小存储体积与可接受还原度之间取得平衡。
 
-完整技术说明见：[docs/whitepaper_zh.md](docs/whitepaper_zh.md)
+完整技术说明见：[docs/whitepaper_zh.md](docs/whitepaper_zh.md)  
+思维导图（Markdown）：[docs/mindmap.md](docs/mindmap.md)
 
 ---
 
@@ -263,7 +271,9 @@ P-LOD/
 ├── LICENSE
 ├── docs/
 │   ├── whitepaper_zh.md
-│   └── plod_architecture.png   # architecture infographic
+│   ├── mindmap.md              # searchable mind map
+│   ├── plod_architecture.png   # architecture infographic (upload)
+│   └── plod_mindmap.png        # visual mind map (upload)
 └── examples/
     ├── requirements.txt
     ├── parse_plod.py
