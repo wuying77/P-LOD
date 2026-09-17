@@ -118,6 +118,22 @@ Same idea: thousands of pixels → **9 structural points**.
 
 ---
 
+### 0.5 GitHub Octocat logo (logo / icon example)
+
+Same logic applied to a real brand mark: the circular GitHub Octocat silhouette.
+
+- **Level 1** (~13 points): [`examples/github_logo_level1.json`](examples/github_logo_level1.json)  
+  Circle center + radius, ear tips/roots, head top, cheeks, chin, tentacle fork and ends, body center.  
+  Enough to recognize “this is the GitHub cat mark”. All smooth fill and intermediate curve samples are weak entanglement.
+
+- **Level 2** (~22 points): [`examples/github_logo_level2.json`](examples/github_logo_level2.json)  
+  Adds ear inner points, jaw, face sides, tentacle curve controls for a smoother silhouette.
+
+A typical PNG of this logo is tens of KB.  
+P-LOD Level 1/2 skeletons are only a few KB of coordinates + topology — same principle as **A** (5 points) and **王** (9 points).
+
+---
+
 ### 1. 3D Humanoid
 
 - **Level 1** (6 points): [`examples/humanoid_level1.json`](examples/humanoid_level1.json)
@@ -232,11 +248,13 @@ P-LOD/
 ├── docs/
 │   └── whitepaper_zh.md
 └── examples/
-    ├── requirements.txt           # pip install -r requirements.txt
-    ├── parse_plod.py              # Quick Start 3D demo
+    ├── requirements.txt
+    ├── parse_plod.py
     ├── humanoid_level1.json
     ├── humanoid_level2.json
     ├── humanoid_level3.json
+    ├── github_logo_level1.json
+    ├── github_logo_level2.json
     ├── cosmic_meditation.png
     ├── cosmic_meditation_level1.json
     ├── cosmic_meditation_level2.json
