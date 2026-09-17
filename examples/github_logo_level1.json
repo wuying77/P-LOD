@@ -1,0 +1,33 @@
+{
+  "format": "P-LOD",
+  "version": "0.1",
+  "dimension": 2,
+  "description": "GitHub Octocat logo – Level 1 extreme skeleton (~14 points)",
+  "source": "GitHub Octocat mark (circular)",
+  "levels": {
+    "1": [
+      { "id": "C",   "position": [0.50, 0.50], "type": "control", "level": 1, "params": { "role": "circle_center", "radius": 0.48 } },
+      { "id": "LE",  "position": [0.32, 0.22], "type": "end",     "level": 1, "params": { "role": "left_ear_tip" } },
+      { "id": "LER", "position": [0.38, 0.32], "type": "joint",   "level": 1, "params": { "role": "left_ear_root" } },
+      { "id": "RE",  "position": [0.68, 0.22], "type": "end",     "level": 1, "params": { "role": "right_ear_tip" } },
+      { "id": "RER", "position": [0.62, 0.32], "type": "joint",   "level": 1, "params": { "role": "right_ear_root" } },
+      { "id": "TOP", "position": [0.50, 0.28], "type": "control", "level": 1, "params": { "role": "head_top" } },
+      { "id": "LC",  "position": [0.28, 0.48], "type": "control", "level": 1, "params": { "role": "left_cheek" } },
+      { "id": "RC",  "position": [0.72, 0.48], "type": "control", "level": 1, "params": { "role": "right_cheek" } },
+      { "id": "CHIN","position": [0.50, 0.72], "type": "joint",   "level": 1, "params": { "role": "chin" } },
+      { "id": "TF",  "position": [0.42, 0.62], "type": "joint",   "level": 1, "params": { "role": "tentacle_fork" } },
+      { "id": "TL",  "position": [0.22, 0.78], "type": "end",     "level": 1, "params": { "role": "left_tentacle_end" } },
+      { "id": "TR",  "position": [0.58, 0.82], "type": "end",     "level": 1, "params": { "role": "right_tentacle_end" } },
+      { "id": "BODY","position": [0.50, 0.58], "type": "control", "level": 1, "params": { "role": "body_center" } }
+    ]
+  },
+  "topology": [
+    ["LER", "LE"], ["LER", "TOP"],
+    ["RER", "RE"], ["RER", "TOP"],
+    ["TOP", "LC"], ["TOP", "RC"],
+    ["LC", "CHIN"], ["RC", "CHIN"],
+    ["CHIN", "TF"], ["TF", "TL"], ["TF", "TR"],
+    ["BODY", "CHIN"]
+  ],
+  "notes": "Level 1 keeps only identity-critical nodes of the Octocat silhouette + circle. Fill and intermediate curve samples are weak entanglement."
+}
