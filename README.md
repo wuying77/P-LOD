@@ -27,6 +27,22 @@ Applicable to 2D images, 3D models, point clouds, **text / books**, **video**, a
 
 ---
 
+## Architecture Overview
+
+![P-LOD architecture overview](docs/plod_architecture.png)
+
+One-page summary of the framework:
+
+- **Strong-entanglement skeleton** vs **weak-entanglement emergence**
+- Tunable trade-off (minimal storage ↔ perceptual fidelity)
+- Point field definition (id, position, type labels, connections)
+- Three progressive levels
+- Cross-media compression examples (image / text / video)
+
+> Place the infographic file at `docs/plod_architecture.png` if it is not yet in the repo.
+
+---
+
 ## English Abstract
 
 We present **P-LOD** (Progressive Strong-Entanglement Point Array with Weak-Entanglement Emergence Encoding), a hierarchical data representation and compression framework. The core idea is to identify the minimal set of points that most critically determine the identity, topology, and primary visual or semantic features of the data—termed the *strong-entanglement skeleton*—and store only this skeleton together with discrete state labels and essential attributes. All remaining details (*weak entanglement*) are discarded at storage time and regenerated at runtime through deterministic or procedural rules.
@@ -246,7 +262,8 @@ P-LOD/
 ├── README.md
 ├── LICENSE
 ├── docs/
-│   └── whitepaper_zh.md
+│   ├── whitepaper_zh.md
+│   └── plod_architecture.png   # architecture infographic
 └── examples/
     ├── requirements.txt
     ├── parse_plod.py
