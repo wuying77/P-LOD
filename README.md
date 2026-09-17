@@ -63,6 +63,61 @@ This loads `humanoid_level1.json` and renders the 6-point strong-entanglement sk
 
 ## Examples
 
+### 0. Character-level intuition (easiest way to understand P-LOD)
+
+**Point-array compression = keep only the key nodes that define the identity of the shape; throw away all intermediate fill; reconnect on demand.**
+
+#### English letter **A** → 5 points
+
+```
+      1
+     / \
+    2   3
+   /     \
+  4-------5
+```
+
+| Point | Role |
+|-------|------|
+| 1 | Apex |
+| 2 | Upper-left corner |
+| 3 | Upper-right corner |
+| 4 | Bottom-left end |
+| 5 | Bottom-right end |
+
+All pixels along the strokes between these nodes are **weak entanglement** — not stored.  
+At reconstruction time, straight lines connect `1-2-4`, `1-3-5`, and `2-3`. The letter **A** reappears.
+
+A bitmap of A may need hundreds or thousands of pixels.  
+P-LOD Level 1 keeps **5 points + topology** (tens of bytes).
+
+#### Chinese character **王** → 9 points
+
+```
+1----2----3
+     |
+4----5----6
+     |
+7----8----9
+```
+
+| Point | Role |
+|-------|------|
+| 1, 2, 3 | Top horizontal (left / mid / right) |
+| 4, 5, 6 | Middle horizontal (left / mid / right) |
+| 7, 8, 9 | Bottom horizontal (left / mid / right) |
+| 2-5-8 | Vertical stroke |
+
+Fill between the nodes is discarded.  
+Reconnect the horizontals and the vertical on demand → character **王**.
+
+Same idea: thousands of pixels → **9 structural points**.
+
+**Ordinary compression** still keeps almost every pixel/stroke and only encodes them more tightly.  
+**P-LOD** deletes the non-contributing fill and regenerates it when needed.
+
+---
+
 ### 1. 3D Humanoid
 
 - **Level 1** (6 points): [`examples/humanoid_level1.json`](examples/humanoid_level1.json)
