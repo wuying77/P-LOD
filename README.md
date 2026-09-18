@@ -24,10 +24,35 @@ An open-source hierarchical skeleton-based data compression and emergence framew
 **We state clearly: P-LOD is public technical commons.**  
 任何商业实体、机构或中间商试图将本协议核心概念**封包私有化、恶意抢注专利、或设立垄断收费墙**的行为，在法律层面将面对本仓库的公开时间戳；就已披露主题而言，其主张往往因**缺乏新颖性（Novelty）**而难以成立。全球开发者与企业均有权**免费、自由使用与演进**本协议。
 
+**Scientific commons clause:** The Strong/Weak Entanglement decoupling and emergence mechanisms specified in P-LOD are derived from fundamental information theory and the Holographic Principle. Any attempt by commercial entities to monopolize or patent these physical intuitions, as disclosed here, constitutes an obstacle to the human collective cognitive boundary and is intended to be ineffective under global Prior Art practice.
+
 MIT 仍允许基于 P-LOD 的**商业产品**；本声明针对的是把**开放标准本身**变成私人专利护城河。
 
-完整文本（三档风格合一）：**[docs/DEFENSIVE_PUBLICATION.md](docs/DEFENSIVE_PUBLICATION.md)**  
-规范开篇法律表述：见 [docs/SPECIFICATION.md §0](docs/SPECIFICATION.md)
+完整文本：**[docs/DEFENSIVE_PUBLICATION.md](docs/DEFENSIVE_PUBLICATION.md)**  
+规范开篇：见 [docs/SPECIFICATION.md §0](docs/SPECIFICATION.md)
+
+---
+
+## Theoretical Foundation & Reading Guide
+
+### Three Levels of Understanding (分层阅读指南)
+
+To bridge physical intuition with rigid software engineering, P-LOD is designed for three reader profiles:
+
+1. **Level 1 — Engineers & Developers**  
+   Focus on the byte-level protocol ([`docs/SPECIFICATION.md`](docs/SPECIFICATION.md)) and Python reference code ([`examples/plod_spec_codec.py`](examples/plod_spec_codec.py), [`examples/horizon_compression_demo.py`](examples/horizon_compression_demo.py)). Goal: implement encode/decode and measure size collapse with zero non-stdlib dependencies for the codec path.
+
+2. **Level 2 — Scientists & Systems Architects**  
+   Explore compute-for-bandwidth, 90/10 spatial allocation, gait/phase decoupling, multi-domain blueprints (LLM memory, metaverse, generative video) in [`docs/ROADMAP_AND_APPLICATIONS.md`](docs/ROADMAP_AND_APPLICATIONS.md).
+
+3. **Level 3 — Philosophers & Seekers**  
+   Read Strong/Weak Entanglement, horizon-scale compression, and Motherfield Cosmology as information-law metaphors (holographic bounds, sparse structure vs local emergence). Theory essays may live on the author’s Substack / Medium; this repo is the **timestamped engineering anchor** that maps those ideas to wire formats and demos.
+
+| Profile | Start here |
+|---------|------------|
+| Engineer | Spec + `plod_spec_codec.py` + `horizon_compression_demo.py` |
+| Architect | Roadmap + Embodied profile in Spec |
+| Theory reader | Defensive publication + Roadmap §4 + primary essays (external) |
 
 ---
 
@@ -47,7 +72,7 @@ Three progressive levels:
 
 Applicable to 2D images, 3D models, point clouds, **text / books**, **video**, and other data with clear topological structure.
 
-**Wire / frame standard:** [docs/SPECIFICATION.md](docs/SPECIFICATION.md)  
+**Wire / frame standard:** [docs/SPECIFICATION.md](docs/SPECIFICATION.md) (v1.0 core + v1.1 extended metas)  
 **Applications & engineering roadmap:** [docs/ROADMAP_AND_APPLICATIONS.md](docs/ROADMAP_AND_APPLICATIONS.md)
 
 ---
@@ -77,7 +102,7 @@ We present **P-LOD** (Progressive Strong-Entanglement Point Array with Weak-Enta
 
 This design enables a tunable trade-off between storage size and reconstruction fidelity. The proposal is released as prior art under the MIT License for free research, implementation, and improvement by the global community.
 
-**Keywords**: data compression, level of detail, skeleton extraction, procedural generation, hierarchical representation, point-based modeling, progressive encoding, defensive publication, compute-for-bandwidth
+**Keywords**: data compression, level of detail, skeleton extraction, procedural generation, hierarchical representation, point-based modeling, progressive encoding, defensive publication, compute-for-bandwidth, holographic encoding
 
 ---
 
@@ -89,11 +114,11 @@ P-LOD（渐进式强纠缠点阵与弱纠缠涌现编码）是一种面向结构
 
 **一句话原则：** 存骨架，算细节（Store Skeleton, Compute Details）；用端侧算力换带宽与存储。
 
-开源防守见上方专节与 [docs/DEFENSIVE_PUBLICATION.md](docs/DEFENSIVE_PUBLICATION.md)。
+开源防守见上方专节与 [docs/DEFENSIVE_PUBLICATION.md](docs/DEFENSIVE_PUBLICATION.md)。分层阅读见 **Theoretical Foundation & Reading Guide**。
 
 - 技术说明：[docs/whitepaper_zh.md](docs/whitepaper_zh.md)
-- 协议规范 v1.0：[docs/SPECIFICATION.md](docs/SPECIFICATION.md)
-- 应用蓝图与工程路线图：[docs/ROADMAP_AND_APPLICATIONS.md](docs/ROADMAP_AND_APPLICATIONS.md)
+- 协议规范：[docs/SPECIFICATION.md](docs/SPECIFICATION.md)
+- 应用与路线图：[docs/ROADMAP_AND_APPLICATIONS.md](docs/ROADMAP_AND_APPLICATIONS.md)
 - 思维导图：[docs/mindmap.md](docs/mindmap.md)
 
 ---
@@ -108,18 +133,23 @@ pip install -r requirements.txt
 python parse_plod.py
 ```
 
-Loads `humanoid_level1.json` and renders the 6-point strong-entanglement skeleton.
-
 ### Spec v1.0 binary codec (stdlib only)
 
 ```bash
 cd examples
-python plod_spec_codec.py          # round-trip self-test
-python plod_spec_codec.py --demo   # 80-node embodied SE-Frame size (~2.5 KB)
-python test_plod_spec_codec.py     # extra tests
+python plod_spec_codec.py
+python plod_spec_codec.py --demo
+python test_plod_spec_codec.py
 ```
 
-Reference pack/unpack for [Protocol Specification v1.0](docs/SPECIFICATION.md): header, core 24-byte nodes, embodied 32-byte nodes, topology, optional CRC32.
+### Horizon compression demo (stdlib only)
+
+```bash
+cd examples
+python horizon_compression_demo.py
+```
+
+Simulates ~10,000 high-entropy 3D samples, extracts ≤80 SE nodes, packs Embodied SE-Frame + v1.1 `causal_depth` / `resonance_freq` metas, and prints the size collapse.
 
 ---
 
@@ -150,9 +180,6 @@ Reference pack/unpack for [Protocol Specification v1.0](docs/SPECIFICATION.md): 
 All pixels along the strokes between these nodes are **weak entanglement** — not stored.  
 At reconstruction time, straight lines connect `1-2-4`, `1-3-5`, and `2-3`. The letter **A** reappears.
 
-A bitmap of A may need hundreds or thousands of pixels.  
-P-LOD Level 1 keeps **5 points + topology** (tens of bytes).
-
 #### Chinese character **王** → 9 points
 
 ```
@@ -163,127 +190,35 @@ P-LOD Level 1 keeps **5 points + topology** (tens of bytes).
 7----8----9
 ```
 
-| Point | Role |
-|-------|------|
-| 1, 2, 3 | Top horizontal (left / mid / right) |
-| 4, 5, 6 | Middle horizontal (left / mid / right) |
-| 7, 8, 9 | Bottom horizontal (left / mid / right) |
-| 2-5-8 | Vertical stroke |
-
-Fill between the nodes is discarded.  
-Reconnect the horizontals and the vertical on demand → character **王**.
-
 Same idea: thousands of pixels → **9 structural points**.
 
-**Ordinary compression** still keeps almost every pixel/stroke and only encodes them more tightly.  
-**P-LOD** deletes the non-contributing fill and regenerates it when needed.
-
 ---
 
-### 0.5 GitHub Octocat logo (logo / icon example)
+### 0.5 GitHub Octocat logo
 
-Same logic applied to a real brand mark: the circular GitHub Octocat silhouette.
-
-- **Level 1** (~13 points): [`examples/github_logo_level1.json`](examples/github_logo_level1.json)  
-  Circle center + radius, ear tips/roots, head top, cheeks, chin, tentacle fork and ends, body center.  
-  Enough to recognize “this is the GitHub cat mark”. All smooth fill and intermediate curve samples are weak entanglement.
-
-- **Level 2** (~22 points): [`examples/github_logo_level2.json`](examples/github_logo_level2.json)  
-  Adds ear inner points, jaw, face sides, tentacle curve controls for a smoother silhouette.
-
-A typical PNG of this logo is tens of KB.  
-P-LOD Level 1/2 skeletons are only a few KB of coordinates + topology — same principle as **A** (5 points) and **王** (9 points).
-
----
+- **Level 1** (~13 points): [`examples/github_logo_level1.json`](examples/github_logo_level1.json)
+- **Level 2** (~22 points): [`examples/github_logo_level2.json`](examples/github_logo_level2.json)
 
 ### 1. 3D Humanoid
 
-- **Level 1** (6 points): [`examples/humanoid_level1.json`](examples/humanoid_level1.json)
-- **Level 2** (major joints): [`examples/humanoid_level2.json`](examples/humanoid_level2.json)
-- **Level 3** (neck + torso auxiliaries): [`examples/humanoid_level3.json`](examples/humanoid_level3.json)
+- [`examples/humanoid_level1.json`](examples/humanoid_level1.json)
+- [`examples/humanoid_level2.json`](examples/humanoid_level2.json)
+- [`examples/humanoid_level3.json`](examples/humanoid_level3.json)
 
 ### 2. 2D Cosmic Meditation Image
 
 ![Cosmic Meditation – original illustration](examples/cosmic_meditation.png)
 
-This full-color illustration is used as a practical 2D test case for P-LOD.
+| Version | Size | vs Original |
+|---------|------|-------------|
+| Original PNG | **5.48 MB** | 1× |
+| P-LOD Level 1 | **2.6 KB** | **≈ 2,190×** |
+| P-LOD Level 2 | **3.2 KB** | **≈ 1,735×** |
+| P-LOD Level 3 | **4.4 KB** | **≈ 1,267×** |
 
-- **Level 1** → [`examples/cosmic_meditation_level1.json`](examples/cosmic_meditation_level1.json)  
-  ~16 key points (figure anchors, energy path, three main rings, major orbs).  
-  Keeps identity and major composition. Color heavily simplified. Nebula & fine particles = weak entanglement (procedural).
+### 3. Text / Books & 4. Video
 
-- **Level 2** → [`examples/cosmic_meditation_level2.json`](examples/cosmic_meditation_level2.json)  
-  Adds rainbow color segmentation for the rising energy stream + better orb/glow colors.  
-  Target: roughly **80% perceptual fidelity** while remaining extremely small.
-
-- **Level 3** → [`examples/cosmic_meditation_level3.json`](examples/cosmic_meditation_level3.json)  
-  Adds intermediate energy-stream points, extra ring radii, shoulder anchors and more orbs for smoother transitions.
-
-#### Size Comparison (this image)
-
-| Version | File | Size | vs Original |
-|---------|------|------|-------------|
-| **Original (uncompressed PNG)** | `cosmic_meditation.png` | **5.48 MB** (5,743,332 bytes) | 1× |
-| **P-LOD Level 1** | `cosmic_meditation_level1.json` | **2.6 KB** (2,623 bytes) | **≈ 2,190× smaller** |
-| **P-LOD Level 2** | `cosmic_meditation_level2.json` | **3.2 KB** (3,310 bytes) | **≈ 1,735× smaller** |
-| **P-LOD Level 3** | `cosmic_meditation_level3.json` | **4.4 KB** (4,532 bytes) | **≈ 1,267× smaller** |
-
-> Note: These sizes are the stored skeleton data only. A real implementation still needs a small emergence/renderer (shader or procedural code) to reconstruct the image at runtime. Even so, the persistent storage footprint drops by three orders of magnitude.
-
-For reference, a typical high-quality JPEG of the same image is usually still several hundred KB to over 1 MB — far larger than the P-LOD skeletons above.
-
----
-
-### 3. Text / Books
-
-P-LOD works the same way on text: only the **strong-entanglement skeleton** is stored (structure, key characters, core plot anchors, essential sentences). The rest is treated as weak entanglement and can be regenerated or expanded on demand.
-
-#### English classic — *Alice’s Adventures in Wonderland*
-
-| Version | Approx. Size | Notes |
-|---------|--------------|-------|
-| Full plain text | **≈ 160–180 KB** | Complete original wording |
-| Typical gzip | **≈ 55–70 KB** | Still stores all content |
-| **P-LOD Level 1** | **≈ 3–5 KB** | Chapter structure + main characters + core plot anchors per chapter |
-| **P-LOD Level 2** | **≈ 8–15 KB** | + key dialogues and important scenes |
-| **P-LOD Level 3** | **≈ 20–35 KB** | More original sentences, still far smaller than full text |
-
-#### Chinese classic — 《西游记》(Journey to the West)
-
-| Version | Approx. Size | Notes |
-|---------|--------------|-------|
-| Full plain text | **≈ 1.8–2.5 MB** | ~100 chapters, complete novel |
-| Typical gzip | **≈ 600–900 KB** | Full content, only encoding compression |
-| **P-LOD Level 1** | **≈ 15–30 KB** | Chapter titles + main character relations + core plot anchor per chapter |
-| **P-LOD Level 2** | **≈ 40–80 KB** | + key events, important dialogues, major poems |
-| **P-LOD Level 3** | **≈ 100–200 KB** | Richer readable version, still dramatically smaller than the original |
-
-**Key difference**  
-- Ordinary compression (gzip etc.) keeps **every word** and only encodes it more tightly.  
-- P-LOD **does not store** most of the words at all — only the strong skeleton. The rest can emerge when needed.
-
-For a long novel like *Journey to the West*, Level 1 can be roughly **100× smaller** than the full text and still an order of magnitude smaller than gzip.
-
----
-
-### 4. Video (1-hour movie example)
-
-The same logic extends to video: store only the strong temporal-spatial skeleton (key scene anchors, major character trajectories, critical keyframes, essential audio cues). Intermediate frames and fine visual details are treated as weak entanglement and generated on playback.
-
-#### Illustrative comparison for a typical 1-hour movie
-
-| Version | Approx. Size | Notes |
-|---------|--------------|-------|
-| Common high-quality 1080p encode (H.264/H.265) | **≈ 1.5–2.5 GB** | Everyday streaming / download size |
-| High-bitrate / 4K version | **≈ 5–12 GB** | Higher fidelity masters |
-| **P-LOD Level 1** | **≈ 5–20 MB** | Extreme skeleton: key scene cuts, main character motion paths, core audio anchors |
-| **P-LOD Level 2** | **≈ 30–80 MB** | + more keyframes, color/lighting anchors, important motion segments |
-| **P-LOD Level 3** | **≈ 100–300 MB** | Denser temporal anchors for smoother reconstruction, still far below normal encodes |
-
-> These video numbers are **conceptual estimates** consistent with the P-LOD philosophy (skeleton only + runtime emergence). Real implementation would require a strong generative / interpolation backend. Even so, the persistent storage reduction versus conventional video files is potentially two to three orders of magnitude.
-
-**Takeaway**  
-A 1-hour movie that normally occupies 2 GB could, under a mature P-LOD approach, live as a few dozen megabytes of strong-entanglement skeleton while still being reconstructible at useful quality when played.
+See size tables in prior revisions of this README and the conceptual estimates in [`docs/ROADMAP_AND_APPLICATIONS.md`](docs/ROADMAP_AND_APPLICATIONS.md).
 
 ---
 
@@ -294,10 +229,12 @@ A 1-hour movie that normally occupies 2 GB could, under a mature P-LOD approach,
 | `id` | Unique point identifier |
 | `position` | 2D or 3D coordinates (or sequential index for text/video) |
 | `rgb` | Color (or other attributes for non-image data) |
-| `type` | Discrete state label (`solid` / `hollow` / `semi-hollow` / `joint` / `end` / `control` / `emitter` …) |
+| `type` | Discrete state label |
 | `level` | Lowest level this point belongs to |
 | `params` | Optional generation parameters |
 | `connections` | Topology links |
+| `resonance_freq` | v1.1 optional meta (float32) |
+| `causal_depth` | v1.1 optional meta (uint8; ≥200 = causal anchor) |
 
 ---
 
@@ -310,7 +247,7 @@ P-LOD/
 ├── docs/
 │   ├── DEFENSIVE_PUBLICATION.md
 │   ├── SPECIFICATION.md
-│   ├── ROADMAP_AND_APPLICATIONS.md   # 跨领域应用蓝图 + 工程路线图 (v1.1+)
+│   ├── ROADMAP_AND_APPLICATIONS.md
 │   ├── whitepaper_zh.md
 │   ├── mindmap.md
 │   ├── plod_architecture.png
@@ -320,40 +257,20 @@ P-LOD/
     ├── parse_plod.py
     ├── plod_spec_codec.py
     ├── test_plod_spec_codec.py
+    ├── horizon_compression_demo.py   # 视界压缩 / 全息降维 demo
     ├── humanoid_level1.json
-    ├── humanoid_level2.json
-    ├── humanoid_level3.json
-    ├── github_logo_level1.json
-    ├── github_logo_level2.json
-    ├── cosmic_meditation.png
-    ├── cosmic_meditation_level1.json
-    ├── cosmic_meditation_level2.json
-    └── cosmic_meditation_level3.json
+    ├── …
 ```
-
-- [`docs/ROADMAP_AND_APPLICATIONS.md`](docs/ROADMAP_AND_APPLICATIONS.md) — 跨领域应用蓝图（LLM 结构化记忆 / 元宇宙轻量渲染 / 生成式视频流 / 具身智能）与工程路线图（自动化 SE 提取、确定性涌现 Profile、纠错锚点）
 
 ---
 
 ## Status & Future Directions
 
-**Current status:** Concept / Prior Art **v0.1** + Spec **v1.0 draft** + Python reference codec.
+**Current status:** Concept / Prior Art **v0.1** + Spec **v1.0** (+ **v1.1 extended metas**) + Python codec + horizon demo.
 
-**Future directions (see full text in the roadmap doc):** P-LOD is expanding from embodied AI toward:
+P-LOD continues from embodied AI toward LLM structured memory, metaverse lightweight rendering, generative streaming, automated SE extraction, EDL profiles, and drift anchors — details in [`docs/ROADMAP_AND_APPLICATIONS.md`](docs/ROADMAP_AND_APPLICATIONS.md).
 
-1. **LLM structured long-context memory** — SE semantic graphs + WE text emergence  
-2. **Metaverse / spatial computing** — skeleton sync + client-side mesh/texture emergence  
-3. **Generative video streaming** — motion/topology SE + edge frame emergence  
-4. **Engineering pillars (v1.1–v2.0)** — automated SE extractors, Emergence Description Language (EDL) profiles, correction anchors against drift  
-
-Open problems (near-term):
-- Automatic extraction of strong-entanglement points
-- Objective quality metrics
-- High-entropy data handling
-- Reference CPU / GPU / shader packs
-- JSON ↔ binary bridge utilities
-
-Contributions, discussions, and implementations are welcome.
+Contributions welcome.
 
 ---
 
