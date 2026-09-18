@@ -2,12 +2,20 @@
 
 **Status:** Draft standard (aligned with concept / prior art v0.1)  
 **License:** MIT  
+**Defensive publication:** See [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md)
+
 **Scope:** Byte-oriented and structural rules so independent implementations can encode, decode, and interoperate.
 
 This document turns the P-LOD *idea* into a **parseable specification**.  
 Philosophy and examples remain in the [README](../README.md) and [whitepaper](whitepaper_zh.md).
 
 **Reference implementation:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) (Python, stdlib only).
+
+---
+
+## 0. Public standard notice
+
+P-LOD Protocol Specification v1.0 is released as **open prior art**. The frame layout, progressive levels, strong-entanglement payload rules, and optional embodied profile are part of a **public technical commons**. They are not offered as a proprietary standard controlled by a single vendor. Implementers may build interoperable codecs freely under MIT terms. Attempts to enclose the same disclosed subject matter behind exclusive patents or intermediary tolls are contrary to the purpose of this publication and are intended to be defeated by this timestamped disclosure.
 
 ---
 
@@ -235,11 +243,12 @@ A system is **Embodied v1.0 compliant** if it additionally:
 | Resource | Path |
 |----------|------|
 | Overview | [README.md](../README.md) |
+| Defensive publication | [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md) |
 | Chinese whitepaper | [whitepaper_zh.md](whitepaper_zh.md) |
 | Mind map | [mindmap.md](mindmap.md) |
 | JSON examples | [`examples/`](../examples/) |
 | 3D JSON demo | [`examples/parse_plod.py`](../examples/parse_plod.py) |
-| **Spec v1.0 codec** | [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) |
+| Spec v1.0 codec | [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) |
 | Codec tests | [`examples/test_plod_spec_codec.py`](../examples/test_plod_spec_codec.py) |
 
 ---
