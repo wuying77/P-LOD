@@ -31,6 +31,9 @@ FLAG_TOPOLOGY_INLINE = 1 << 1
 FLAG_EMBODIED_PROFILE = 1 << 2
 FLAG_FORWARD_FOCUS = 1 << 3
 
+CORE_NODE_SIZE = 24
+EMBODIED_NODE_SIZE = 32
+
 # type_code for core profile (illustrative enum)
 TYPE_CODES = {
     "solid": 1,
@@ -67,7 +70,6 @@ class EmbodiedNode:
     pos: Tuple[float, float, float]
     vel: Tuple[float, float, float] = (0.0, 0.0, 0.0)
     phase_angle: float = 0.0
-    reserved: int = 0
 
 
 @dataclass
@@ -108,8 +110,9 @@ def _unpack_header(data: bytes, offset: int = 0):
 
 def pack_core_node(n: CoreNode) -> bytes:
     tc = TYPE_CODES.get(n.type_name, 0)
+    # 24 bytes: H B B + 3f + 4B + f
     return struct.pack(
-        "<HBB fff BBBB f",
+        "<HBB3f4Bf",
         n.node_id & 0xFFFF,
         n.level & 0xFF,
         tc & 0xFF,
@@ -126,7 +129,7 @@ def pack_core_node(n: CoreNode) -> bytes:
 
 def unpack_core_node(data: bytes, offset: int) -> Tuple[CoreNode, int]:
     node_id, level, tc, x, y, z, r, g, b, flags, param0 = struct.unpack_from(
-        "<HBB fff BBBB f", data, offset
+        "<HBB3f4Bf", data, offset
     )
     return (
         CoreNode(
@@ -142,15 +145,16 @@ def unpack_core_node(data: bytes, offset: int) -> Tuple[CoreNode, int]:
             flags=flags,
             param0=param0,
         ),
-        offset + 24,
+        offset + CORE_NODE_SIZE,
     )
 
 
 def pack_embodied_node(n: EmbodiedNode) -> bytes:
+    """32 bytes: HBB + pos(3f) + vel(3f) + phase(f)."""
     px, py, pz = n.pos
     vx, vy, vz = n.vel
-    return struct.pack(
-        "<HBB fff fff f I",
+    blob = struct.pack(
+        "<HBB3f3ff",
         n.node_id & 0xFFFF,
         n.risk_state & 0xFF,
         n.sub_system & 0xFF,
@@ -161,24 +165,15 @@ def pack_embodied_node(n: EmbodiedNode) -> bytes:
         float(vy),
         float(vz),
         float(n.phase_angle),
-        n.reserved & 0xFFFFFFFF,
     )
+    assert len(blob) == EMBODIED_NODE_SIZE
+    return blob
 
 
 def unpack_embodied_node(data: bytes, offset: int) -> Tuple[EmbodiedNode, int]:
-    (
-        node_id,
-        risk,
-        sub,
-        px,
-        py,
-        pz,
-        vx,
-        vy,
-        vz,
-        phase,
-        reserved,
-    ) = struct.unpack_from("<HBB fff fff f I", data, offset)
+    node_id, risk, sub, px, py, pz, vx, vy, vz, phase = struct.unpack_from(
+        "<HBB3f3ff", data, offset
+    )
     return (
         EmbodiedNode(
             node_id=node_id,
@@ -187,9 +182,8 @@ def unpack_embodied_node(data: bytes, offset: int) -> Tuple[EmbodiedNode, int]:
             pos=(px, py, pz),
             vel=(vx, vy, vz),
             phase_angle=phase,
-            reserved=reserved,
         ),
-        offset + 32,
+        offset + EMBODIED_NODE_SIZE,
     )
 
 
@@ -269,7 +263,9 @@ def unpack_packet(data: bytes, expect_crc: bool = True) -> PlodPacket:
         (crc_read,) = struct.unpack_from("<I", data, off)
         crc_calc = zlib.crc32(data[:off]) & 0xFFFFFFFF
         if crc_read != crc_calc:
-            raise ValueError(f"CRC mismatch: got 0x{crc_read:08X}, expected 0x{crc_calc:08X}")
+            raise ValueError(
+                f"CRC mismatch: got 0x{crc_read:08X}, expected 0x{crc_calc:08X}"
+            )
 
     return PlodPacket(
         sequence_id=sequence_id,
@@ -327,6 +323,7 @@ def _self_test() -> None:
     assert len(back2.embodied_nodes) == 2
     assert back2.embodied_nodes[1].risk_state == 1
     assert back2.flags & FLAG_EMBODIED_PROFILE
+    assert len(pack_embodied_node(emb.embodied_nodes[0])) == 32
 
     print("self-test OK")
     print(f"  core packet size:     {len(raw)} bytes")
@@ -353,7 +350,7 @@ def _demo_size() -> None:
     raw = pack_packet(pkt, with_crc=True)
     print(f"Embodied SE-Frame: {n} nodes")
     print(f"  packed size = {len(raw)} bytes ({len(raw)/1024:.2f} KB)")
-    print(f"  (header 8 + {n}*32 + crc 4 = {8 + n*32 + 4} without topology)")
+    print(f"  (header 8 + {n}*32 + crc 4 = {8 + n * 32 + 4} without topology)")
 
 
 def main() -> None:
