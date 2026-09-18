@@ -2,20 +2,25 @@
 
 **Status:** Draft standard (aligned with concept / prior art v0.1)  
 **License:** MIT  
-**Defensive publication:** See [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md)
+**Defensive publication:** [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md)
 
 **Scope:** Byte-oriented and structural rules so independent implementations can encode, decode, and interoperate.
-
-This document turns the P-LOD *idea* into a **parseable specification**.  
-Philosophy and examples remain in the [README](../README.md) and [whitepaper](whitepaper_zh.md).
 
 **Reference implementation:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) (Python, stdlib only).
 
 ---
 
-## 0. Public standard notice
+## 0. Legal & Public Domain Status (Defensive Publication)
 
-P-LOD Protocol Specification v1.0 is released as **open prior art**. The frame layout, progressive levels, strong-entanglement payload rules, and optional embodied profile are part of a **public technical commons**. They are not offered as a proprietary standard controlled by a single vendor. Implementers may build interoperable codecs freely under MIT terms. Attempts to enclose the same disclosed subject matter behind exclusive patents or intermediary tolls are contrary to the purpose of this publication and are intended to be defeated by this timestamped disclosure.
+This specification and its associated algorithms constitute a **Defensive Publication** designed to protect the open-source data, spatial computing, and embodied AI ecosystem from predatory patenting and institutional monopolization.
+
+By publishing this protocol under the **MIT License** with immutable cryptographic timestamps on public version control, all theoretical models, field layouts, and operational parameters described herein are permanently established as **Prior Art**.
+
+Any subsequent patent applications asserting ownership or exclusivity over the foundational concepts of P-LOD—including strong/weak entanglement decoupling, progressive Level 1–3 point-array encoding, SE-Frame / WE-Stream separation, sparse topological skeletons, or regional compute-allocation policies disclosed in this repository—shall be opposed as lacking **novelty** under applicable global patent practice, to the extent prior art is recognized.
+
+**P-LOD is a public technical commons.** Implementers may build interoperable codecs freely under MIT. Attempts to enclose the same disclosed subject matter behind exclusive patents or intermediary tolls are contrary to the purpose of this publication.
+
+Full statement: [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md).
 
 ---
 
