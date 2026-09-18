@@ -1,6 +1,6 @@
 # P-LOD Extended Applications & Engineering Roadmap (v1.0+)
 
-**Status:** Companion to [SPECIFICATION.md](SPECIFICATION.md) v1.0  
+**Status:** Companion to [SPECIFICATION.md](SPECIFICATION.md) v1.0 / v1.1  
 **License:** MIT · Prior art — see [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md)
 
 ---
@@ -17,6 +17,20 @@ P-LOD transitions spatial computing and data transmission from **brute-force sta
 | **WE-Stream** | High-entropy appearance, prose fill, texture, in-between frames | Optional; generated or fetched locally |
 
 **Compute-for-Bandwidth:** once the skeleton is correct, edge devices spend FLOPs to reconstruct detail instead of shipping every pixel, token, or mesh vertex.
+
+### 1.1 Official Reference Emergence Engine — Benchmark Base
+
+The repository ships an **official, stdlib-only Reference Emergence Engine**:
+
+[`examples/reference_emergence_engine.py`](../examples/reference_emergence_engine.py)
+
+Per [SPECIFICATION.md §9](SPECIFICATION.md), this implementation is the **normative Source of Truth** for compliance tests:
+
+- Transparent algorithms (linear-spline profile `plod.ref.linear_spline.v1`)
+- Public Topological Consistency Score (TCS) definition
+- Third-party stacks (including large-vendor GPU paths) may accelerate freely, but claims of **"P-LOD Compliant"** emergence are measured against this baseline (or an openly documented alternate profile)
+
+This is how P-LOD retains **interpretive authority** as a global open standard without locking implementers into a single hardware vendor.
 
 ---
 
@@ -81,32 +95,30 @@ To bridge disclosure and universal deployment, work concentrates on three pillar
 
 | Item | Content |
 |------|--------|
-| **Objective** | Pipelines (GNN, semantic segmentation, saliency, structure-from-motion, document parsers) that score topological necessity (\(\Delta\) topology \(\neq 0\)) |
-| **Target** | Replace manual node placement for arbitrary point clouds, images, text graphs, and video tracks |
-| **Milestone sense** | v1.1 research prototypes → v2.0 reference extractors with published metrics |
+| **Objective** | Pipelines that score topological necessity |
+| **Target** | Replace manual node placement for arbitrary media |
+| **Milestone sense** | v1.1 prototypes → v2.0 reference extractors |
 
 ### ② Deterministic Emergence Profiling (Cross-Platform Consistency)
 
 | Item | Content |
 |------|--------|
-| **Objective** | A hardware-agnostic **Emergence Description Language (EDL)** or profile registry |
-| **Target** | Same `Profile_ID` + `Seed_Code` yields bit-identical *or* statistically bounded reconstructions across GPU vendors and edge RTOS |
-| **Milestone sense** | Profile registry + conformance tests; soft-determinism tiers if full bit-identity is impossible |
+| **Objective** | **Emergence Description Language (EDL)** / profile registry, expanding from `plod.ref.linear_spline.v1` |
+| **Target** | Same `Profile_ID` + `Seed_Code` → bit-identical or statistically bounded reconstructions across vendors |
+| **Milestone sense** | Conformance suites keyed to the **official reference engine** |
 
 ### ③ Error Accumulation & Drift Correction (Anchor Verification)
 
 | Item | Content |
 |------|--------|
-| **Objective** | Low-frequency **Correction Anchors** inside long temporal SE-Streams |
-| **Target** | Limit perceptual drift (including “uncanny valley” artifacts) under iterative WE generation |
-| **Milestone sense** | Spec extension for anchor packets + drift metrics |
+| **Objective** | Low-frequency **Correction Anchors** in long SE-Streams |
+| **Target** | Bound perceptual drift under iterative WE generation |
 
 ### Supporting work items
 
-- JSON ↔ binary bridge utilities for Spec v1.0
-- Objective quality metrics (structure-preserving, not only PSNR)
-- High-entropy failure modes and explicit “do not force SE” guidance
-- Reference CPU / GPU / shader packs for WE emergence
+- JSON ↔ binary bridges
+- Structure-preserving quality metrics
+- GPU / shader packs that still pass reference TCS gates
 
 ---
 
@@ -114,7 +126,7 @@ To bridge disclosure and universal deployment, work concentrates on three pillar
 
 From a *Motherfield Cosmology* reading, P-LOD mirrors a processing law: **do not store every micro-detail in bulk memory; store conservation-scale structure (SE-Frame) and compute local appearance upon observation or query (WE-Emergence).**
 
-This section is interpretive context for architects. Normative wire behavior remains defined only in [SPECIFICATION.md](SPECIFICATION.md).
+Interpretive only. Normative behavior: [SPECIFICATION.md](SPECIFICATION.md).
 
 ---
 
@@ -122,6 +134,7 @@ This section is interpretive context for architects. Normative wire behavior rem
 
 | Version | Notes |
 |---------|--------|
-| v1.0+ | Initial applications & roadmap companion to Spec v1.0 |
+| v1.0+ | Applications & roadmap companion |
+| +ref-engine | Official Reference Emergence Engine as benchmark base (Spec §9) |
 
 Contributions that advance extractors, EDL profiles, or drift anchors should open issues/PRs against this roadmap and the Spec.
