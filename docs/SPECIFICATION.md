@@ -7,6 +7,8 @@
 This document turns the P-LOD *idea* into a **parseable specification**.  
 Philosophy and examples remain in the [README](../README.md) and [whitepaper](whitepaper_zh.md).
 
+**Reference implementation:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) (Python, stdlib only).
+
 ---
 
 ## 1. Goals
@@ -105,16 +107,18 @@ Topology MAY follow as: `uint16 edge_count` + `edge_count × (uint16 a, uint16 b
 
 ## 5. Embodied Profile (Optional) — 32-byte SE-Node
 
-When `FLAGS.EMBODIED_PROFILE = 1`, nodes use an autonomy-oriented layout (Gemini draft, refined).
+When `FLAGS.EMBODIED_PROFILE = 1`, nodes use an autonomy-oriented layout.
 
 ### 5.1 SE-Node memory layout (32 bytes)
 
 ```
-[Node_ID: 2B] [Risk_State: 1B] [Sub_System: 1B]
-[Pos_X: 4B] [Pos_Y: 4B] [Pos_Z: 4B]
-[Vel_X: 4B] [Vel_Y: 4B] [Vel_Z: 4B]
-[Phase_Angle: 4B] [Reserved: 4B]
+[Node_ID: 2B] [Risk_State: 1B] [Sub_System: 1B]     # 4 bytes
+[Pos_X: 4B] [Pos_Y: 4B] [Pos_Z: 4B]                 # 12 bytes  (total 16)
+[Vel_X: 4B] [Vel_Y: 4B] [Vel_Z: 4B]                 # 12 bytes  (total 28)
+[Phase_Angle: 4B]                                   # 4 bytes   (total 32)
 ```
+
+Little-endian. Struct layout equivalent: `uint16, uint8, uint8, float32×3, float32×3, float32`.
 
 ### 5.2 Risk state machine (`Risk_State`)
 
@@ -161,6 +165,8 @@ Decoders MUST still accept and use SE if WE is missing or fails.
 
 Emergence rules (noise, shaders, language model fill, video interpolators) are **not** frozen in v1.0 wire format; they are bound by `type`, `params`, and external profile documents.
 
+Optional **CRC32** (IEEE, zlib-compatible) MAY be appended as a 4-byte little-endian trailer over the packet bytes excluding the CRC itself.
+
 ---
 
 ## 7. Worked size example (illustrative)
@@ -175,6 +181,8 @@ Assumptions for one embodied-style frame:
 | 80 SE nodes × 32 bytes | 2,560 bytes |
 | CRC32 (optional trailer) | 4 bytes |
 | **Total** | **2,572 bytes ≈ 2.51 KB** |
+
+Verified by `python examples/plod_spec_codec.py --demo`.
 
 Under these assumptions, a dense raw cloud on the order of ~5 MB/frame can be reduced to a ~2.5 KB SE-Frame if the application truly only needs the topological skeleton for the decision loop.  
 **This is an engineering identity under stated node counts — not a universal constant for every image or movie.**
@@ -230,7 +238,9 @@ A system is **Embodied v1.0 compliant** if it additionally:
 | Chinese whitepaper | [whitepaper_zh.md](whitepaper_zh.md) |
 | Mind map | [mindmap.md](mindmap.md) |
 | JSON examples | [`examples/`](../examples/) |
-| Demo parser | [`examples/parse_plod.py`](../examples/parse_plod.py) |
+| 3D JSON demo | [`examples/parse_plod.py`](../examples/parse_plod.py) |
+| **Spec v1.0 codec** | [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) |
+| Codec tests | [`examples/test_plod_spec_codec.py`](../examples/test_plod_spec_codec.py) |
 
 ---
 
