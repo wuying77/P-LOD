@@ -6,6 +6,7 @@ from plod_spec_codec import (
     CoreNode,
     EmbodiedNode,
     PlodPacket,
+    pack_embodied_node,
     pack_packet,
     unpack_packet,
 )
@@ -38,6 +39,7 @@ def test_embodied_roundtrip():
     out = unpack_packet(pack_packet(pkt))
     assert out.embodied_nodes[0].risk_state == 2
     assert abs(out.embodied_nodes[0].phase_angle - 1.57) < 1e-5
+    assert len(pack_embodied_node(pkt.embodied_nodes[0])) == 32
 
 
 if __name__ == "__main__":
