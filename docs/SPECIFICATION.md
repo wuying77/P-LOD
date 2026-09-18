@@ -6,7 +6,8 @@
 
 **Scope:** Byte-oriented and structural rules so independent implementations can encode, decode, and interoperate.
 
-**Reference implementation:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) (Python, stdlib only).  
+**Codec reference:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py)  
+**Emergence reference (normative):** [`examples/reference_emergence_engine.py`](../examples/reference_emergence_engine.py)  
 **Horizon demo:** [`examples/horizon_compression_demo.py`](../examples/horizon_compression_demo.py)
 
 ---
@@ -49,16 +50,7 @@ A P-LOD packet has two logical layers:
 | **SE-Frame** | Strong-Entanglement Frame | Deterministic, low-entropy topological skeleton. Required for identity, safety-critical logic, structure. |
 | **WE-Stream** | Weak-Entanglement Stream | Optional. High-entropy detail for reconstruction / display only. May be absent, external, or generated locally. |
 
-```
-+-----------------------------------------------------------------------+
-| P-LOD PACKET CONTAINER                                                |
-+-----------------------------------------------------------------------+
-| [Header]  |  [Strong-Entanglement Frame (SE-Frame)]  |  [WE pointer / |
-|  fixed    |  variable (nodes + topology)             |   optional blob]|
-+-----------------------------------------------------------------------+
-```
-
-**Design rule:** Mission-critical decisions (recognition of structure, collision topology, plot anchors, keyframe graph) MUST be possible from the **SE-Frame alone**. WE is never required for structural correctness.
+**Design rule:** Mission-critical decisions MUST be possible from the **SE-Frame alone**. WE is never required for structural correctness.
 
 ---
 
@@ -99,26 +91,22 @@ On the wire, v1.0 recommends a fixed **24-byte core node** for simple binary cod
 | `id` | yes | Unique node id within the packet / asset |
 | `position` | yes | 2D, 3D, or 1D sequential index (text/video time) |
 | `level` | yes | 1 / 2 / 3 (progressive LOD) |
-| `type` | yes | Discrete label: `solid`, `hollow`, `semi-hollow`, `joint`, `end`, `control`, `emitter`, … |
+| `type` | yes | Discrete label |
 | `rgb` / attrs | optional | Color or domain attributes |
 | `params` | optional | Generation hints for WE emergence |
-| `connections` | optional | Topology (may be packet-global edge list) |
+| `connections` | optional | Topology |
 
 ### 4.2 Suggested binary core node (24 bytes)
 
-| Offset | Field | Type | Notes |
-|--------|-------|------|-------|
-| 0..1 | `node_id` | uint16 | |
-| 2 | `level` | uint8 | 1..3 |
-| 3 | `type_code` | uint8 | Enum (implementation table) |
-| 4..7 | `x` | float32 | or normalized fixed-point in a profile |
-| 8..11 | `y` | float32 | |
-| 12..15 | `z` | float32 | use 0 for 2D |
-| 16..18 | `r,g,b` | uint8×3 | optional; 0 if unused |
-| 19 | `flags` | uint8 | node-local flags |
-| 20..23 | `param0` | float32 | optional scalar / packed hint |
-
-Topology MAY follow as: `uint16 edge_count` + `edge_count × (uint16 a, uint16 b)`.
+| Offset | Field | Type |
+|--------|-------|------|
+| 0..1 | `node_id` | uint16 |
+| 2 | `level` | uint8 |
+| 3 | `type_code` | uint8 |
+| 4..15 | `x,y,z` | float32 × 3 |
+| 16..18 | `r,g,b` | uint8 × 3 |
+| 19 | `flags` | uint8 |
+| 20..23 | `param0` | float32 |
 
 ---
 
@@ -129,103 +117,49 @@ When `FLAGS.EMBODIED_PROFILE = 1`, nodes use an autonomy-oriented layout.
 ### 5.1 SE-Node memory layout (32 bytes)
 
 ```
-[Node_ID: 2B] [Risk_State: 1B] [Sub_System: 1B]     # 4 bytes
-[Pos_X: 4B] [Pos_Y: 4B] [Pos_Z: 4B]                 # 12 bytes  (total 16)
-[Vel_X: 4B] [Vel_Y: 4B] [Vel_Z: 4B]                 # 12 bytes  (total 28)
-[Phase_Angle: 4B]                                   # 4 bytes   (total 32)
+[Node_ID: 2B] [Risk_State: 1B] [Sub_System: 1B]
+[Pos_X: 4B] [Pos_Y: 4B] [Pos_Z: 4B]
+[Vel_X: 4B] [Vel_Y: 4B] [Vel_Z: 4B]
+[Phase_Angle: 4B]
 ```
 
-Little-endian. Struct layout equivalent: `uint16, uint8, uint8, float32×3, float32×3, float32`.
+### 5.2–5.5 Risk state, Sub_System, Phase, 90/10 policy
 
-### 5.2 Risk state machine (`Risk_State`)
+Unchanged from prior draft (see repository history / README embodied notes). Summary:
 
-| Value | Name | Meaning |
-|-------|------|--------|
-| `0x00` | `SAFE` / hollow-white | Background / non-threatening topology |
-| `0x01` | `WATCH` / half-hollow | Intention or threshold rising |
-| `0x02` | `CRITICAL` / solid-black | Actuation priority / collision lock |
+- Risk: `SAFE=0`, `WATCH=1`, `CRITICAL=2`
+- Sub_System: upper `0x10`, lower `0x20`, peripheral `0x30`
+- ~90% compute forward cone / ~10% periphery until escalation
 
-### 5.3 Sub-system tag (`Sub_System`)
+### 5.6 Extended Vector Metas (v1.1, optional)
 
-| Value | Meaning |
-|-------|--------|
-| `0x10` | Upper body / CoM-related |
-| `0x20` | Lower body / gait phase |
-| `0x30` | Peripheral spatial array |
-| other | Reserved / vendor |
+When `FLAGS.EXTENDED_META = 1`, each SE node is followed by 8 bytes:
 
-### 5.4 Phase angle
-
-`Phase_Angle` as float32 in \([-\pi, \pi]\) (or normalized fixed-point in constrained profiles).  
-Intended for gait / inclination decoupling (upper vs lower kinematics) so intention can be flagged **before** full body cross into a lane.
-
-### 5.5 Spatial compute policy (normative for embodied compliance)
-
-Implementations claiming **P-LOD Embodied v1.0** SHOULD document a priority policy equivalent to:
-
-- **~90%** compute budget on nodes in the **forward trajectory cone** (e.g. \(|\theta| \le 30°\) from travel axis), higher sample rate.
-- **~10%** on peripheral / rear topology until a node enters `WATCH` or `CRITICAL`, then boost.
-
-Exact angles and Hz are deployment parameters; the **ratio intent** is part of the profile.
-
-### 5.6 Extended Vector Metas (v1.1, optional, forward-compatible)
-
-When `FLAGS.EXTENDED_META = 1` (recommended with `VERSION = 0x11`), **each** SE node (Core 24B or Embodied 32B) is immediately followed by an **8-byte** meta block:
-
-| Offset | Field | Type | Description |
-|--------|-------|------|-------------|
-| 0..3 | `resonance_freq` | float32 | Operational resonance of the node in the topological field (phase alignment / impedance matching under noise) |
-| 4 | `causal_depth` | uint8 | Causal impact weight in \([0, 255]\). Values \(\ge 200\) mark **Causal Anchors**: removing them permanently alters identity or trajectory topology |
-| 5..7 | `pad` | uint8×3 | Must be zero in v1.1; reserved for future sub-fields |
-
-**Compatibility rules:**
-
-- v1.0 decoders that ignore unknown flag bits MAY skip packets with `EXTENDED_META` if they do not implement v1.1, or skip 8 bytes per node when the bit is set.
-- Core 24B / Embodied 32B layouts are **unchanged**; metas are strictly additive.
-- Reference illustration: `examples/horizon_compression_demo.py`.
+| Offset | Field | Type |
+|--------|-------|------|
+| 0..3 | `resonance_freq` | float32 |
+| 4 | `causal_depth` | uint8 (\(\ge 200\) = Causal Anchor) |
+| 5..7 | pad | 0 |
 
 ---
 
 ## 6. Weak-Entanglement Stream
 
-WE is **out of band relative to structural truth**:
+WE is out of band relative to structural truth. Decoders MUST accept SE without WE.
 
-- Omitted entirely (structure-only asset)
-- Pointer / URL / content-hash in an extension trailer
-- Inline blob after SE (discouraged for huge media; fine for small procedural seeds)
-
-Decoders MUST still accept and use SE if WE is missing or fails.
-
-Emergence rules (noise, shaders, language model fill, video interpolators) are **not** frozen in v1.0 wire format; they are bound by `type`, `params`, and external profile documents.
-
-Optional **CRC32** (IEEE, zlib-compatible) MAY be appended as a 4-byte little-endian trailer over the packet bytes excluding the CRC itself.
+Optional CRC32 trailer (zlib-compatible) MAY follow the SE payload.
 
 ---
 
 ## 7. Worked size example (illustrative)
 
-### 7.1 Sparse SE-Frame arithmetic
-
-Assumptions for one embodied-style frame:
-
 | Item | Size |
 |------|------|
-| Header | 8 bytes |
-| 80 SE nodes × 32 bytes | 2,560 bytes |
-| CRC32 (optional trailer) | 4 bytes |
-| **Total** | **2,572 bytes ≈ 2.51 KB** |
-
-Verified by `python examples/plod_spec_codec.py --demo`.
-
-With v1.1 metas: add \(80 \times 8 = 640\) bytes → still on the order of **~3.1 KB** for the same node count.
-
-### 7.2 Repo media examples (JSON skeletons)
-
-Human-readable JSON in `examples/` (Cosmic Meditation, humanoid, etc.) demonstrates the **same sparsity principle** with different node counts and domains. See README size tables.
-
-### 7.3 Horizon compression demo
-
-`python examples/horizon_compression_demo.py` generates ~10k high-entropy samples, extracts ≤80 SE nodes, and packs an Embodied frame with `causal_depth` metas.
+| Header | 8 B |
+| 80 × 32 B embodied nodes | 2,560 B |
+| CRC32 | 4 B |
+| **Total (no meta)** | **2,572 B ≈ 2.51 KB** |
+| + 80 × 8 B v1.1 meta | **~3.1 KB** |
 
 ---
 
@@ -234,56 +168,84 @@ Human-readable JSON in `examples/` (Cosmic Meditation, humanoid, etc.) demonstra
 | Level | SE content | Intent |
 |-------|------------|--------|
 | **1** | Extreme skeleton | Identity + critical topology |
-| **2** | + attributes / color / major events | ~high perceptual or semantic coverage |
-| **3** | + local transitions / denser anchors | Smoother reconstruction |
-
-Packets MAY carry only Level 1 nodes; higher levels are additive deltas or full supersets (encoder choice). Flag or `level` field on nodes distinguishes membership.
+| **2** | + attributes / color / major events | High coverage |
+| **3** | + local transitions | Smoother reconstruction |
 
 ---
 
-## 9. Compliance checklist
+## 9. Official Reference Emergence Engine (Normative)
+
+### 9.1 Status
+
+The file **[`examples/reference_emergence_engine.py`](../examples/reference_emergence_engine.py)** is the **official normative reference implementation** of P-LOD SE decoding + deterministic WE emergence for Spec **v1.0 / v1.1**.
+
+It is the **Source of Truth** (benchmark base) for compliance discussions:
+
+- Algorithm is transparent, published, and **stdlib-only** (no vendor SDK required to audit behavior).
+- Profile id: `plod.ref.linear_spline.v1`
+- Default seed: `0x504C4F44` (`PLOD`)
+
+### 9.2 What “P-LOD Compliant” means for third parties
+
+Any third-party implementation (C++ / CUDA / Rust / WebAssembly / proprietary GPU paths) that claims **P-LOD Compliant** for emergence SHALL:
+
+1. Correctly parse SE-Frames per Sections 3–5 (including optional v1.1 metas).
+2. Produce WE detail whose **Topological Consistency Score (TCS)** against the same SE input is **≥ 0.99** when evaluated with the reference TCS definition in the reference engine, **or** document an alternate profile id and publish its own open test vectors.
+3. Not require WE for safety-critical decisions driven only by SE topology.
+
+Accelerated or proprietary engines may differ in surface appearance; **topological / structural agreement with the reference engine is the compliance bar**, not pixel-identical marketing renders.
+
+### 9.3 Reference profile behavior (summary)
+
+`plod.ref.linear_spline.v1`:
+
+- Builds a deterministic edge chain over ordered node ids (plus ring close).
+- Emits Level-2 midpoints and Level-3 quarter points along each edge.
+- Applies seed-locked micro-jitter scaled down for high `causal_depth` (anchors stay stiff).
+- Reports `P-LOD Standard Compliance Test PASS` when TCS ≥ 0.99.
+
+### 9.4 Running the reference
+
+```bash
+cd examples
+python reference_emergence_engine.py
+python reference_emergence_engine.py --nodes 80
+```
+
+---
+
+## 10. Compliance checklist
 
 A decoder is **Core v1.0 compliant** if it:
 
 1. Recognizes `MAGIC = 0x504C` and `VERSION = 0x10` (and MAY accept `0x11`)
-2. Reads `SE_NODE_COUNT` and parses the SE payload without requiring WE
-3. Honors `level` and basic `type` for progressive display
-4. Ignores unknown flag bits and reserved fields safely
+2. Reads `SE_NODE_COUNT` and parses SE without requiring WE
+3. Honors progressive `level` semantics
+4. Ignores unknown flag bits safely
 
-A system is **Embodied v1.0 compliant** if it additionally:
-
-1. Sets / accepts `EMBODIED_PROFILE`
-2. Implements Risk_State and Sub_System semantics above
-3. Documents forward vs peripheral compute policy
-
-**v1.1 extended meta compliance:** when `EXTENDED_META` is set, parse or skip the 8-byte block per node without breaking SE topology.
+**Emergence-compliant** systems additionally meet Section 9 against the official reference engine (or an openly documented alternate profile).
 
 ---
 
-## 10. Versioning
+## 11. Versioning
 
-- **v1.0** — core header, Core 24B / Embodied 32B nodes, WE optional, CRC optional
-- **v1.1** — additive Extended Vector Metas (`resonance_freq`, `causal_depth`); no breaking change to v1.0 node bodies
-- Breaking wire changes require major VERSION bump
-- JSON examples may lead the binary layout during early adoption
+- **v1.0** — core header, Core 24B / Embodied 32B, WE optional, CRC optional
+- **v1.1** — Extended Vector Metas; additive only
+- Reference emergence engine tracks v1.0/v1.1 wire; profile id versions independently (`plod.ref.*.vN`)
 
 ---
 
-## 11. References in this repository
+## 12. References in this repository
 
 | Resource | Path |
 |----------|------|
 | Overview | [README.md](../README.md) |
 | Defensive publication | [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md) |
-| Roadmap & applications | [ROADMAP_AND_APPLICATIONS.md](ROADMAP_AND_APPLICATIONS.md) |
-| Chinese whitepaper | [whitepaper_zh.md](whitepaper_zh.md) |
-| Mind map | [mindmap.md](mindmap.md) |
-| JSON examples | [`examples/`](../examples/) |
-| 3D JSON demo | [`examples/parse_plod.py`](../examples/parse_plod.py) |
-| Spec v1.0 codec | [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) |
-| Horizon compression demo | [`examples/horizon_compression_demo.py`](../examples/horizon_compression_demo.py) |
-| Codec tests | [`examples/test_plod_spec_codec.py`](../examples/test_plod_spec_codec.py) |
+| Roadmap | [ROADMAP_AND_APPLICATIONS.md](ROADMAP_AND_APPLICATIONS.md) |
+| Spec codec | [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) |
+| **Reference emergence engine** | [`examples/reference_emergence_engine.py`](../examples/reference_emergence_engine.py) |
+| Horizon demo | [`examples/horizon_compression_demo.py`](../examples/horizon_compression_demo.py) |
 
 ---
 
-*P-LOD Protocol Specification v1.0 + v1.1 extended metas — drafted for open implementation. Prior art under MIT.*
+*P-LOD Protocol Specification v1.0 + v1.1 — open implementation. Prior art under MIT. Reference emergence engine is normative for compliance tests.*
