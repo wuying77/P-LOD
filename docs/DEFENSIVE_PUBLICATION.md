@@ -29,6 +29,8 @@ By publishing this protocol under the MIT License with cryptographic commit hist
 
 Subsequent patent applications asserting ownership or exclusivity over the foundational concepts of P-LOD—including but not limited to strong/weak entanglement decoupling, progressive point-array levels, sparse SE-Frame wire formats, and related control-allocation ideas disclosed in this repository—are intended to be **invalidated for lack of novelty** under applicable patent law, to the fullest extent such prior art is recognized.
 
+**Scientific commons clause.** The Strong/Weak Entanglement decoupling and emergence mechanisms specified in P-LOD are derived from fundamental information theory and the Holographic Principle (as the interpretive frame for sparse boundary / horizon-scale encoding). Any attempt by commercial entities to monopolize or patent these physical intuitions, as published here, constitutes an obstacle to the human collective cognitive boundary and shall be treated as contrary to this Prior Art disclosure under global prior-art practice.
+
 ---
 
 ## Scope limits (honest boundaries)

@@ -6,7 +6,8 @@
 
 **Scope:** Byte-oriented and structural rules so independent implementations can encode, decode, and interoperate.
 
-**Reference implementation:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) (Python, stdlib only).
+**Reference implementation:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) (Python, stdlib only).  
+**Horizon demo:** [`examples/horizon_compression_demo.py`](../examples/horizon_compression_demo.py)
 
 ---
 
@@ -17,6 +18,8 @@ This specification and its associated algorithms constitute a **Defensive Public
 By publishing this protocol under the **MIT License** with immutable cryptographic timestamps on public version control, all theoretical models, field layouts, and operational parameters described herein are permanently established as **Prior Art**.
 
 Any subsequent patent applications asserting ownership or exclusivity over the foundational concepts of P-LOD—including strong/weak entanglement decoupling, progressive Level 1–3 point-array encoding, SE-Frame / WE-Stream separation, sparse topological skeletons, or regional compute-allocation policies disclosed in this repository—shall be opposed as lacking **novelty** under applicable global patent practice, to the extent prior art is recognized.
+
+**Scientific commons clause.** The Strong/Weak Entanglement decoupling and emergence mechanisms specified in P-LOD are derived from fundamental information theory and the Holographic Principle (as interpretive framing for sparse boundary encoding). Any attempt by commercial entities to monopolize or patent these physical intuitions, as disclosed here, constitutes an obstacle to the human collective cognitive boundary and is intended to be rendered ineffective under global Prior Art practice.
 
 **P-LOD is a public technical commons.** Implementers may build interoperable codecs freely under MIT. Attempts to enclose the same disclosed subject matter behind exclusive patents or intermediary tolls are contrary to the purpose of this publication.
 
@@ -66,7 +69,7 @@ Binary layout is little-endian unless otherwise noted.
 | Offset | Field | Type | Description |
 |--------|-------|------|-------------|
 | 0..1 | `MAGIC` | uint16 | `0x504C` (`'P' 'L'`) |
-| 2 | `VERSION` | uint8 | `0x10` = v1.0 |
+| 2 | `VERSION` | uint8 | `0x10` = v1.0 core wire; `0x11` = v1.1 with extended metas present |
 | 3 | `FLAGS` | uint8 | Bit flags (see below) |
 | 4..5 | `SE_NODE_COUNT` | uint16 | Number of SE nodes in this packet |
 | 6..7 | `SEQUENCE_ID` | uint16 | Temporal / stream sequence number |
@@ -79,7 +82,8 @@ Binary layout is little-endian unless otherwise noted.
 | 1 | `TOPOLOGY_INLINE` | 1 = edge list included after nodes |
 | 2 | `EMBODIED_PROFILE` | 1 = nodes use embodied 32-byte layout (Section 5) |
 | 3 | `FORWARD_FOCUS` | Hint: encoder prioritized forward cone (embodied) |
-| 4..7 | Reserved | Must be 0 in v1.0 |
+| 4 | `EXTENDED_META` | 1 = each SE node is followed by v1.1 Extended Vector Meta (8 bytes) |
+| 5..7 | Reserved | Must be 0 unless a later minor version defines them |
 
 ---
 
@@ -164,6 +168,22 @@ Implementations claiming **P-LOD Embodied v1.0** SHOULD document a priority poli
 
 Exact angles and Hz are deployment parameters; the **ratio intent** is part of the profile.
 
+### 5.6 Extended Vector Metas (v1.1, optional, forward-compatible)
+
+When `FLAGS.EXTENDED_META = 1` (recommended with `VERSION = 0x11`), **each** SE node (Core 24B or Embodied 32B) is immediately followed by an **8-byte** meta block:
+
+| Offset | Field | Type | Description |
+|--------|-------|------|-------------|
+| 0..3 | `resonance_freq` | float32 | Operational resonance of the node in the topological field (phase alignment / impedance matching under noise) |
+| 4 | `causal_depth` | uint8 | Causal impact weight in \([0, 255]\). Values \(\ge 200\) mark **Causal Anchors**: removing them permanently alters identity or trajectory topology |
+| 5..7 | `pad` | uint8×3 | Must be zero in v1.1; reserved for future sub-fields |
+
+**Compatibility rules:**
+
+- v1.0 decoders that ignore unknown flag bits MAY skip packets with `EXTENDED_META` if they do not implement v1.1, or skip 8 bytes per node when the bit is set.
+- Core 24B / Embodied 32B layouts are **unchanged**; metas are strictly additive.
+- Reference illustration: `examples/horizon_compression_demo.py`.
+
 ---
 
 ## 6. Weak-Entanglement Stream
@@ -197,12 +217,15 @@ Assumptions for one embodied-style frame:
 
 Verified by `python examples/plod_spec_codec.py --demo`.
 
-Under these assumptions, a dense raw cloud on the order of ~5 MB/frame can be reduced to a ~2.5 KB SE-Frame if the application truly only needs the topological skeleton for the decision loop.  
-**This is an engineering identity under stated node counts — not a universal constant for every image or movie.**
+With v1.1 metas: add \(80 \times 8 = 640\) bytes → still on the order of **~3.1 KB** for the same node count.
 
 ### 7.2 Repo media examples (JSON skeletons)
 
 Human-readable JSON in `examples/` (Cosmic Meditation, humanoid, etc.) demonstrates the **same sparsity principle** with different node counts and domains. See README size tables.
+
+### 7.3 Horizon compression demo
+
+`python examples/horizon_compression_demo.py` generates ~10k high-entropy samples, extracts ≤80 SE nodes, and packs an Embodied frame with `causal_depth` metas.
 
 ---
 
@@ -222,7 +245,7 @@ Packets MAY carry only Level 1 nodes; higher levels are additive deltas or full 
 
 A decoder is **Core v1.0 compliant** if it:
 
-1. Recognizes `MAGIC = 0x504C` and `VERSION = 0x10`
+1. Recognizes `MAGIC = 0x504C` and `VERSION = 0x10` (and MAY accept `0x11`)
 2. Reads `SE_NODE_COUNT` and parses the SE payload without requiring WE
 3. Honors `level` and basic `type` for progressive display
 4. Ignores unknown flag bits and reserved fields safely
@@ -233,13 +256,16 @@ A system is **Embodied v1.0 compliant** if it additionally:
 2. Implements Risk_State and Sub_System semantics above
 3. Documents forward vs peripheral compute policy
 
+**v1.1 extended meta compliance:** when `EXTENDED_META` is set, parse or skip the 8-byte block per node without breaking SE topology.
+
 ---
 
 ## 10. Versioning
 
-- **v1.0** — this document (draft locked for community review)
-- Breaking wire changes require VERSION bump
-- JSON examples may lead the binary layout during v0.x → v1.x transition
+- **v1.0** — core header, Core 24B / Embodied 32B nodes, WE optional, CRC optional
+- **v1.1** — additive Extended Vector Metas (`resonance_freq`, `causal_depth`); no breaking change to v1.0 node bodies
+- Breaking wire changes require major VERSION bump
+- JSON examples may lead the binary layout during early adoption
 
 ---
 
@@ -249,13 +275,15 @@ A system is **Embodied v1.0 compliant** if it additionally:
 |----------|------|
 | Overview | [README.md](../README.md) |
 | Defensive publication | [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md) |
+| Roadmap & applications | [ROADMAP_AND_APPLICATIONS.md](ROADMAP_AND_APPLICATIONS.md) |
 | Chinese whitepaper | [whitepaper_zh.md](whitepaper_zh.md) |
 | Mind map | [mindmap.md](mindmap.md) |
 | JSON examples | [`examples/`](../examples/) |
 | 3D JSON demo | [`examples/parse_plod.py`](../examples/parse_plod.py) |
 | Spec v1.0 codec | [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) |
+| Horizon compression demo | [`examples/horizon_compression_demo.py`](../examples/horizon_compression_demo.py) |
 | Codec tests | [`examples/test_plod_spec_codec.py`](../examples/test_plod_spec_codec.py) |
 
 ---
 
-*P-LOD Protocol Specification v1.0 — drafted for open implementation. Prior art under MIT.*
+*P-LOD Protocol Specification v1.0 + v1.1 extended metas — drafted for open implementation. Prior art under MIT.*
