@@ -35,6 +35,8 @@ MIT 仍允许基于 P-LOD 的**商业产品**；本声明针对的是把**开放
 
 P-LOD stores only the **minimal strong-entanglement skeleton** (key points + topology + discrete state labels) and regenerates the remaining details (**weak entanglement**) at runtime through deterministic / procedural rules.
 
+> **Store Skeleton, Compute Details** — trade local compute for bandwidth and storage.
+
 Three progressive levels:
 
 | Level | Content | Typical size | Goal |
@@ -45,7 +47,8 @@ Three progressive levels:
 
 Applicable to 2D images, 3D models, point clouds, **text / books**, **video**, and other data with clear topological structure.
 
-**Wire / frame standard (for implementers):** [docs/SPECIFICATION.md](docs/SPECIFICATION.md) — Protocol Specification v1.0 (Core + optional Embodied profile).
+**Wire / frame standard:** [docs/SPECIFICATION.md](docs/SPECIFICATION.md)  
+**Applications & engineering roadmap:** [docs/ROADMAP_AND_APPLICATIONS.md](docs/ROADMAP_AND_APPLICATIONS.md)
 
 ---
 
@@ -74,7 +77,7 @@ We present **P-LOD** (Progressive Strong-Entanglement Point Array with Weak-Enta
 
 This design enables a tunable trade-off between storage size and reconstruction fidelity. The proposal is released as prior art under the MIT License for free research, implementation, and improvement by the global community.
 
-**Keywords**: data compression, level of detail, skeleton extraction, procedural generation, hierarchical representation, point-based modeling, progressive encoding, defensive publication
+**Keywords**: data compression, level of detail, skeleton extraction, procedural generation, hierarchical representation, point-based modeling, progressive encoding, defensive publication, compute-for-bandwidth
 
 ---
 
@@ -84,10 +87,13 @@ P-LOD（渐进式强纠缠点阵与弱纠缠涌现编码）是一种面向结构
 
 核心思路：只永久存储对整体可识别性与可重构性贡献最高的最小点集及其拓扑与关键属性（强纠缠骨架）；其余细节（弱纠缠）在调用时由规则实时涌现生成。通过 Level 1 → 2 → 3 的渐进方式，在极小存储体积与可接受还原度之间取得平衡。
 
+**一句话原则：** 存骨架，算细节（Store Skeleton, Compute Details）；用端侧算力换带宽与存储。
+
 开源防守见上方专节与 [docs/DEFENSIVE_PUBLICATION.md](docs/DEFENSIVE_PUBLICATION.md)。
 
 - 技术说明：[docs/whitepaper_zh.md](docs/whitepaper_zh.md)
 - 协议规范 v1.0：[docs/SPECIFICATION.md](docs/SPECIFICATION.md)
+- 应用蓝图与工程路线图：[docs/ROADMAP_AND_APPLICATIONS.md](docs/ROADMAP_AND_APPLICATIONS.md)
 - 思维导图：[docs/mindmap.md](docs/mindmap.md)
 
 ---
@@ -304,6 +310,7 @@ P-LOD/
 ├── docs/
 │   ├── DEFENSIVE_PUBLICATION.md
 │   ├── SPECIFICATION.md
+│   ├── ROADMAP_AND_APPLICATIONS.md   # 跨领域应用蓝图 + 工程路线图 (v1.1+)
 │   ├── whitepaper_zh.md
 │   ├── mindmap.md
 │   ├── plod_architecture.png
@@ -324,18 +331,26 @@ P-LOD/
     └── cosmic_meditation_level3.json
 ```
 
+- [`docs/ROADMAP_AND_APPLICATIONS.md`](docs/ROADMAP_AND_APPLICATIONS.md) — 跨领域应用蓝图（LLM 结构化记忆 / 元宇宙轻量渲染 / 生成式视频流 / 具身智能）与工程路线图（自动化 SE 提取、确定性涌现 Profile、纠错锚点）
+
 ---
 
-## Status & Roadmap
+## Status & Future Directions
 
-Current status: **Concept / Prior Art v0.1** + **Spec v1.0 draft** + **Python reference codec**
+**Current status:** Concept / Prior Art **v0.1** + Spec **v1.0 draft** + Python reference codec.
 
-Open problems:
+**Future directions (see full text in the roadmap doc):** P-LOD is expanding from embodied AI toward:
+
+1. **LLM structured long-context memory** — SE semantic graphs + WE text emergence  
+2. **Metaverse / spatial computing** — skeleton sync + client-side mesh/texture emergence  
+3. **Generative video streaming** — motion/topology SE + edge frame emergence  
+4. **Engineering pillars (v1.1–v2.0)** — automated SE extractors, Emergence Description Language (EDL) profiles, correction anchors against drift  
+
+Open problems (near-term):
 - Automatic extraction of strong-entanglement points
 - Objective quality metrics
 - High-entropy data handling
-- Reference implementations (CPU / GPU / shader)
-- Concrete text/book/video skeleton schemas and emergence rules
+- Reference CPU / GPU / shader packs
 - JSON ↔ binary bridge utilities
 
 Contributions, discussions, and implementations are welcome.
