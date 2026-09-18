@@ -73,7 +73,7 @@ P-LOD（渐进式强纠缠点阵与弱纠缠涌现编码）是一种面向结构
 
 ## Quick Start / Demo
 
-Run the minimal 3D skeleton visualization demo in Python:
+### 3D skeleton view (JSON)
 
 ```bash
 cd examples
@@ -81,7 +81,18 @@ pip install -r requirements.txt
 python parse_plod.py
 ```
 
-This loads `humanoid_level1.json` and renders the 6-point strong-entanglement skeleton in a 3D viewport.
+Loads `humanoid_level1.json` and renders the 6-point strong-entanglement skeleton.
+
+### Spec v1.0 binary codec (stdlib only)
+
+```bash
+cd examples
+python plod_spec_codec.py          # round-trip self-test
+python plod_spec_codec.py --demo   # 80-node embodied SE-Frame size (~2.5 KB)
+python test_plod_spec_codec.py     # extra tests
+```
+
+Reference pack/unpack for [Protocol Specification v1.0](docs/SPECIFICATION.md): header, core 24-byte nodes, embodied 32-byte nodes, topology, optional CRC32.
 
 ---
 
@@ -270,14 +281,16 @@ P-LOD/
 ├── README.md
 ├── LICENSE
 ├── docs/
-│   ├── SPECIFICATION.md        # Protocol / Data Frame Spec v1.0
+│   ├── SPECIFICATION.md
 │   ├── whitepaper_zh.md
 │   ├── mindmap.md
 │   ├── plod_architecture.png
 │   └── plod_mindmap.png
 └── examples/
     ├── requirements.txt
-    ├── parse_plod.py
+    ├── parse_plod.py              # 3D JSON demo (matplotlib)
+    ├── plod_spec_codec.py         # Spec v1.0 binary pack/unpack
+    ├── test_plod_spec_codec.py
     ├── humanoid_level1.json
     ├── humanoid_level2.json
     ├── humanoid_level3.json
@@ -293,7 +306,7 @@ P-LOD/
 
 ## Status & Roadmap
 
-Current status: **Concept / Prior Art v0.1** + **Spec v1.0 draft**
+Current status: **Concept / Prior Art v0.1** + **Spec v1.0 draft** + **Python reference codec**
 
 Open problems:
 - Automatic extraction of strong-entanglement points
@@ -301,7 +314,7 @@ Open problems:
 - High-entropy data handling
 - Reference implementations (CPU / GPU / shader)
 - Concrete text/book/video skeleton schemas and emergence rules
-- Binary reference encoder/decoder for SPEC v1.0
+- JSON ↔ binary bridge utilities
 
 Contributions, discussions, and implementations are welcome.
 
