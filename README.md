@@ -8,6 +8,7 @@ An open-source hierarchical skeleton-based data compression and emergence framew
 [![Version](https://img.shields.io/badge/version-v0.1.0-blue.svg)]()
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)]()
 [![Status](https://img.shields.io/badge/status-concept%20v0.1-lightgrey.svg)]()
+[![Spec](https://img.shields.io/badge/spec-v1.0%20draft-orange.svg)](docs/SPECIFICATION.md)
 
 ---
 
@@ -25,6 +26,8 @@ Three progressive levels:
 
 Applicable to 2D images, 3D models, point clouds, **text / books**, **video**, and other data with clear topological structure.
 
+**Wire / frame standard (for implementers):** [docs/SPECIFICATION.md](docs/SPECIFICATION.md) — Protocol Specification v1.0 (Core + optional Embodied profile).
+
 ---
 
 ## Architecture Overview
@@ -39,14 +42,10 @@ One-page summary of the framework:
 - Three progressive levels
 - Cross-media compression examples (image / text / video)
 
-> Upload the infographic to `docs/plod_architecture.png` if it is not yet in the repo.
-
 ### Mind map
 
 - **Markdown (searchable):** [docs/mindmap.md](docs/mindmap.md)
-- **Visual (optional):** ![P-LOD mind map](docs/plod_mindmap.png)
-
-> Upload the Notebook mind-map export to `docs/plod_mindmap.png` (or `.svg`) if you want the image embedded.
+- **Visual:** ![P-LOD mind map](docs/plod_mindmap.png)
 
 ---
 
@@ -66,8 +65,9 @@ P-LOD（渐进式强纠缠点阵与弱纠缠涌现编码）是一种面向结构
 
 核心思路：只永久存储对整体可识别性与可重构性贡献最高的最小点集及其拓扑与关键属性（强纠缠骨架）；其余细节（弱纠缠）在调用时由规则实时涌现生成。通过 Level 1 → 2 → 3 的渐进方式，在极小存储体积与可接受还原度之间取得平衡。
 
-完整技术说明见：[docs/whitepaper_zh.md](docs/whitepaper_zh.md)  
-思维导图（Markdown）：[docs/mindmap.md](docs/mindmap.md)
+- 技术说明：[docs/whitepaper_zh.md](docs/whitepaper_zh.md)
+- 协议规范 v1.0：[docs/SPECIFICATION.md](docs/SPECIFICATION.md)
+- 思维导图：[docs/mindmap.md](docs/mindmap.md)
 
 ---
 
@@ -270,10 +270,11 @@ P-LOD/
 ├── README.md
 ├── LICENSE
 ├── docs/
+│   ├── SPECIFICATION.md        # Protocol / Data Frame Spec v1.0
 │   ├── whitepaper_zh.md
-│   ├── mindmap.md              # searchable mind map
-│   ├── plod_architecture.png   # architecture infographic (upload)
-│   └── plod_mindmap.png        # visual mind map (upload)
+│   ├── mindmap.md
+│   ├── plod_architecture.png
+│   └── plod_mindmap.png
 └── examples/
     ├── requirements.txt
     ├── parse_plod.py
@@ -292,7 +293,7 @@ P-LOD/
 
 ## Status & Roadmap
 
-Current status: **Concept / Prior Art v0.1**
+Current status: **Concept / Prior Art v0.1** + **Spec v1.0 draft**
 
 Open problems:
 - Automatic extraction of strong-entanglement points
@@ -300,6 +301,7 @@ Open problems:
 - High-entropy data handling
 - Reference implementations (CPU / GPU / shader)
 - Concrete text/book/video skeleton schemas and emergence rules
+- Binary reference encoder/decoder for SPEC v1.0
 
 Contributions, discussions, and implementations are welcome.
 
