@@ -1,19 +1,31 @@
 #!/usr/bin/env python3
 """
-P-LOD Reconstruction Fidelity (RFS) evaluation (stdlib only)
+P-LOD Reconstruction Fidelity evaluation (stdlib only).
 
-Compares a dense synthetic cloud vs SE skeleton + linear-spline emergence.
-Reports: Compression Ratio (CR), Chamfer Distance (CD), TCS, RFS.
+Uses shared plod_metrics:
+  CD = 0.5 * (mean_nn(A,B) + mean_nn(B,A))
+  RFS = max(0, 1 - min(1, CD / bbox_diagonal))
+  TCS via topological_consistency_score
 
-Usage:
-  python eval_reconstruction_fidelity.py
+Emergence baseline: plod.ref.linear_spline.v1 midpoints.
 """
 
 from __future__ import annotations
 
 import math
 import random
+import sys
+from pathlib import Path
 from typing import List, Sequence, Tuple
+
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+
+from plod_metrics import (
+    reconstruction_fidelity_score,
+    topological_consistency_score,
+)
 
 Point = Tuple[float, float, float]
 
@@ -39,12 +51,13 @@ def grid_centroids(pts: Sequence[Point], grid: float = 0.4, max_n: int = 64) -> 
     out = []
     for bucket in ranked:
         n = len(bucket)
-        out.append((sum(p[0] for p in bucket) / n, sum(p[1] for p in bucket) / n, sum(p[2] for p in bucket) / n))
+        out.append(
+            (sum(p[0] for p in bucket) / n, sum(p[1] for p in bucket) / n, sum(p[2] for p in bucket) / n)
+        )
     return out
 
 
-def emerge_midpoints(anchors: Sequence[Point]) -> List[Point]:
-    """Frozen linear_spline.v1-style: consecutive midpoints + ring close."""
+def emerge_v1_midpoints(anchors: Sequence[Point]) -> List[Point]:
     if len(anchors) < 2:
         return list(anchors)
     out: List[Point] = []
@@ -56,67 +69,21 @@ def emerge_midpoints(anchors: Sequence[Point]) -> List[Point]:
     return out
 
 
-def chamfer(a: Sequence[Point], b: Sequence[Point], sample_a: int = 800, sample_b: int = 800) -> float:
-    """Symmetric mean nearest-neighbor distance (Chamfer proxy)."""
-
-    def mean_nn(src: Sequence[Point], dst: Sequence[Point], sample: int) -> float:
-        if not src or not dst:
-            return 1e9
-        step = max(1, len(src) // sample)
-        total = 0.0
-        n = 0
-        for i in range(0, len(src), step):
-            x, y, z = src[i]
-            best = min((x - q[0]) ** 2 + (y - q[1]) ** 2 + (z - q[2]) ** 2 for q in dst)
-            total += math.sqrt(best)
-            n += 1
-        return total / max(n, 1)
-
-    return 0.5 * (mean_nn(a, b, sample_a) + mean_nn(b, a, sample_b))
-
-
-def tcs_box(anchors: Sequence[Point], emerged: Sequence[Point]) -> float:
-    if not anchors:
-        return 0.0
-    xs, ys, zs = zip(*anchors)
-    min_x, max_x = min(xs), max(xs)
-    min_y, max_y = min(ys), max(ys)
-    min_z, max_z = min(zs), max(zs)
-    diag = math.sqrt((max_x - min_x) ** 2 + (max_y - min_y) ** 2 + (max_z - min_z) ** 2) or 1.0
-    pad = 0.05 * diag
-    if not emerged:
-        return 1.0
-    ok = sum(
-        1
-        for p in emerged
-        if min_x - pad <= p[0] <= max_x + pad
-        and min_y - pad <= p[1] <= max_y + pad
-        and min_z - pad <= p[2] <= max_z + pad
-    )
-    return ok / len(emerged)
-
-
 def main() -> None:
     cloud = generate_volume(5000)
     anchors = grid_centroids(cloud, max_n=64)
-    emerged = emerge_midpoints(anchors)
+    emerged = emerge_v1_midpoints(anchors)
     recon = list(anchors) + emerged
 
     raw_bytes = len(cloud) * 24 + 64
-    # SE frame size proxy: 8 header + 64*(32+8) + 4 crc (embodied+meta)
     se_bytes = 8 + len(anchors) * 40 + 4
     cr = raw_bytes / max(se_bytes, 1)
 
-    cd = chamfer(cloud, recon)
-    # normalize CD by bbox diagonal for RFS in [0,1]
-    xs, ys, zs = zip(*cloud)
-    diag = math.sqrt((max(xs) - min(xs)) ** 2 + (max(ys) - min(ys)) ** 2 + (max(zs) - min(zs)) ** 2) or 1.0
-    cd_norm = min(1.0, cd / diag)
-    rfs = max(0.0, 1.0 - cd_norm)
-    tcs = tcs_box(anchors, emerged)
+    rfs, cd, cd_norm = reconstruction_fidelity_score(cloud, recon)
+    tcs = topological_consistency_score(anchors, emerged)
 
     print("=== P-LOD Reconstruction Fidelity Report ===")
-    print("Profile baseline: plod.ref.linear_spline.v1 (frozen normative midpoint emergence)")
+    print("Profile baseline: plod.ref.linear_spline.v1 (frozen normative)")
     print()
     print("| Metric                         | Value")
     print("|--------------------------------|------------------")
@@ -131,7 +98,7 @@ def main() -> None:
     print(f"| TCS (protocol compliance)      | {tcs:.4f}")
     print(f"| RFS = 1 - normalized CD        | {rfs:.4f}")
     print()
-    print("Note: TCS measures protocol topology bounds; RFS measures fidelity to Ground Truth.")
+    print("Note: TCS ≠ RFS. Shared formulas from plod_metrics.py.")
     print("STATUS:", "TCS PASS" if tcs >= 0.99 else "TCS FAIL")
 
 

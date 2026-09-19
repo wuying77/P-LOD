@@ -1,0 +1,24 @@
+name: P-LOD CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Generate golden vectors
+        run: python tests/generate_vectors.py
+      - name: Compliance tests
+        run: python tests/run_compliance_tests.py
+      - name: Codec demo
+        run: python examples/plod_spec_codec.py --demo
+      - name: Reference engine v1
+        run: python examples/reference_emergence_engine.py --profile v1
