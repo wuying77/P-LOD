@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""
-P-LOD Reconstruction Fidelity evaluation (stdlib only).
-
-Uses shared plod_metrics:
-  CD = 0.5 * (mean_nn(A,B) + mean_nn(B,A))
-  RFS = max(0, 1 - min(1, CD / bbox_diagonal))
-  TCS via topological_consistency_score
-
-Emergence baseline: plod.ref.linear_spline.v1 midpoints.
-"""
+"""RFS / TCS-AABB evaluation; v1 samples t={0.25,0.50,0.75} per derived edge."""
 
 from __future__ import annotations
 
@@ -22,10 +13,7 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-from plod_metrics import (
-    reconstruction_fidelity_score,
-    topological_consistency_score,
-)
+from plod_metrics import reconstruction_fidelity_score, tcs_aabb
 
 Point = Tuple[float, float, float]
 
@@ -57,22 +45,25 @@ def grid_centroids(pts: Sequence[Point], grid: float = 0.4, max_n: int = 64) -> 
     return out
 
 
-def emerge_v1_midpoints(anchors: Sequence[Point]) -> List[Point]:
+def emerge_v1(anchors: Sequence[Point]) -> List[Point]:
+    """Derived Edge Rule: consecutive + ring; t in {0.25, 0.50, 0.75}."""
     if len(anchors) < 2:
         return list(anchors)
     out: List[Point] = []
-    for i in range(len(anchors) - 1):
-        a, b = anchors[i], anchors[i + 1]
-        out.append(((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2))
-    a, b = anchors[-1], anchors[0]
-    out.append(((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2))
+    pairs = [(anchors[i], anchors[i + 1]) for i in range(len(anchors) - 1)]
+    pairs.append((anchors[-1], anchors[0]))
+    for a, b in pairs:
+        for t in (0.25, 0.50, 0.75):
+            out.append(
+                (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t)
+            )
     return out
 
 
 def main() -> None:
     cloud = generate_volume(5000)
     anchors = grid_centroids(cloud, max_n=64)
-    emerged = emerge_v1_midpoints(anchors)
+    emerged = emerge_v1(anchors)
     recon = list(anchors) + emerged
 
     raw_bytes = len(cloud) * 24 + 64
@@ -80,26 +71,23 @@ def main() -> None:
     cr = raw_bytes / max(se_bytes, 1)
 
     rfs, cd, cd_norm = reconstruction_fidelity_score(cloud, recon)
-    tcs = topological_consistency_score(anchors, emerged)
+    tcs = tcs_aabb(anchors, emerged)
 
     print("=== P-LOD Reconstruction Fidelity Report ===")
-    print("Profile baseline: plod.ref.linear_spline.v1 (frozen normative)")
+    print("Profile: plod.ref.linear_spline.v1 (Derived Edge Rule, t={0.25,0.50,0.75})")
     print()
-    print("| Metric                         | Value")
-    print("|--------------------------------|------------------")
-    print(f"| Original cloud points          | {len(cloud):,}")
-    print(f"| SE anchors                     | {len(anchors)}")
-    print(f"| Emerged WE samples             | {len(emerged)}")
-    print(f"| Raw size estimate (bytes)      | {raw_bytes:,}")
-    print(f"| SE-Frame size estimate (bytes) | {se_bytes:,}")
-    print(f"| Compression Ratio (CR)         | {cr:.2f}×")
-    print(f"| Chamfer Distance (CD)          | {cd:.6f}")
-    print(f"| CD / bbox diagonal             | {cd_norm:.6f}")
-    print(f"| TCS (protocol compliance)      | {tcs:.4f}")
-    print(f"| RFS = 1 - normalized CD        | {rfs:.4f}")
-    print()
-    print("Note: TCS ≠ RFS. Shared formulas from plod_metrics.py.")
-    print("STATUS:", "TCS PASS" if tcs >= 0.99 else "TCS FAIL")
+    print(f"| CR                              | {cr:.2f}×")
+    print(f"| Chamfer Distance (CD)           | {cd:.6f}")
+    print(f"| normalized CD                   | {cd_norm:.6f}")
+    print(f"| RFS                             | {rfs:.4f}")
+    print(
+        f"| TCS-AABB = {tcs:.4f} | Status: Protocol AABB Containment "
+        f"{'PASS' if tcs >= 0.99 else 'FAIL'}"
+    )
+    print(
+        "(Note: Verifies emerged points fall strictly within SE anchor bounding bounds; "
+        "not a full graph-topology invariant.)"
+    )
 
 
 if __name__ == "__main__":
