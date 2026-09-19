@@ -1,366 +1,316 @@
 #!/usr/bin/env python3
 """
-P-LOD Protocol Specification v1.0 — Python reference codec
+P-LOD Spec v1.1 public codec (stdlib only) — single source of truth for pack/decode.
 
-Pack / unpack:
-  - 8-byte header
-  - Core profile nodes (24 bytes each)  OR  Embodied profile nodes (32 bytes each)
-  - Optional topology edge list
-  - Optional CRC32 trailer
+FLAGS (Little-Endian wire):
+  HAS_CONSTRAINT_TABLE = 0x01
+  IS_EMBODIED_PROFILE  = 0x02
+  HAS_EXTENDED_META    = 0x04
 
-See docs/SPECIFICATION.md
+CRC-32/ISO-HDLC over Header+Nodes+Constraints (excludes trailing CRC).
+Global/N/A node marker in constraints: 0xFFFF
 
 Usage:
-  python plod_spec_codec.py              # self-test round-trip
-  python plod_spec_codec.py --demo       # pack a tiny embodied frame and print sizes
+  python plod_spec_codec.py --demo
 """
 
 from __future__ import annotations
 
 import argparse
+import math
 import struct
 import zlib
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
-MAGIC = 0x504C  # 'P''L'
-VERSION = 0x10  # v1.0
+MAGIC = 0x504C
+VERSION_V10 = 0x10
+VERSION_V11 = 0x11
 
-FLAG_WE_PRESENT = 1 << 0
-FLAG_TOPOLOGY_INLINE = 1 << 1
-FLAG_EMBODIED_PROFILE = 1 << 2
-FLAG_FORWARD_FOCUS = 1 << 3
+FLAG_HAS_CONSTRAINT_TABLE = 1 << 0  # 0x01
+FLAG_IS_EMBODIED_PROFILE = 1 << 1  # 0x02
+FLAG_HAS_EXTENDED_META = 1 << 2  # 0x04
 
-CORE_NODE_SIZE = 24
-EMBODIED_NODE_SIZE = 32
+GLOBAL_NA = 0xFFFF
+MAX_SE_NODES = 65535
+MAX_CONSTRAINTS = 65535
+MAX_FRAME_SIZE = 16 * 1024 * 1024
 
-# type_code for core profile (illustrative enum)
-TYPE_CODES = {
-    "solid": 1,
-    "hollow": 2,
-    "semi-hollow": 3,
-    "joint": 4,
-    "end": 5,
-    "control": 6,
-    "emitter": 7,
-}
-TYPE_NAMES = {v: k for k, v in TYPE_CODES.items()}
+CORE_FMT = "<HBB3f3BBf"
+CORE_SIZE = 24
+EMBODIED_SIZE = 32
+META_SIZE = 8
+CONSTRAINT_SIZE = 16
 
 
-@dataclass
-class CoreNode:
-    node_id: int
-    level: int
-    type_name: str
-    x: float
-    y: float
-    z: float = 0.0
-    r: int = 0
-    g: int = 0
-    b: int = 0
-    flags: int = 0
-    param0: float = 0.0
+class ProtocolError(Exception):
+    """Mandatory rejection path for non-compliant frames."""
 
 
 @dataclass
-class EmbodiedNode:
+class SENode:
     node_id: int
-    risk_state: int  # 0 SAFE, 1 WATCH, 2 CRITICAL
-    sub_system: int  # 0x10 upper, 0x20 lower, 0x30 peripheral
     pos: Tuple[float, float, float]
+    level: int = 1
+    type_code: int = 0
+    rgb: Tuple[int, int, int] = (0, 0, 0)
+    node_flags: int = 0
+    param0: float = 0.0
+    risk_state: int = 0
+    sub_system: int = 0
     vel: Tuple[float, float, float] = (0.0, 0.0, 0.0)
-    phase_angle: float = 0.0
+    phase: float = 0.0
+    resonance_freq: float = 1.0
+    causal_depth: int = 0
 
 
 @dataclass
-class PlodPacket:
-    sequence_id: int = 0
-    flags: int = 0
-    core_nodes: List[CoreNode] = field(default_factory=list)
-    embodied_nodes: List[EmbodiedNode] = field(default_factory=list)
-    edges: List[Tuple[int, int]] = field(default_factory=list)
-    we_blob: Optional[bytes] = None  # optional weak payload (not required for structure)
-
-    @property
-    def embodied(self) -> bool:
-        return bool(self.flags & FLAG_EMBODIED_PROFILE)
+class Constraint:
+    ctype: int
+    node_a: int
+    node_b: int
+    param0: float
+    param1: float = 0.0
 
 
-def _pack_header(node_count: int, flags: int, sequence_id: int) -> bytes:
-    return struct.pack(
+@dataclass
+class DecodedFrame:
+    version: int
+    flags: int
+    sequence_id: int
+    nodes: List[SENode]
+    constraints: List[Constraint] = field(default_factory=list)
+    raw_size: int = 0
+
+
+def _check_finite(x: float, name: str = "coord") -> None:
+    if math.isnan(x) or math.isinf(x):
+        raise ProtocolError(f"NaN/Inf in {name}")
+
+
+def encode_frame(
+    nodes: Sequence[SENode],
+    *,
+    constraints: Optional[Sequence[Constraint]] = None,
+    embodied: bool = False,
+    extended_meta: bool = False,
+    version: int = VERSION_V11,
+    sequence_id: int = 1,
+) -> bytes:
+    if len(nodes) > MAX_SE_NODES:
+        raise ProtocolError("MAX_SE_NODES exceeded")
+    cons = list(constraints or [])
+    if len(cons) > MAX_CONSTRAINTS:
+        raise ProtocolError("MAX_CONSTRAINTS exceeded")
+
+    flags = 0
+    if cons:
+        flags |= FLAG_HAS_CONSTRAINT_TABLE
+    if embodied:
+        flags |= FLAG_IS_EMBODIED_PROFILE
+    if extended_meta:
+        flags |= FLAG_HAS_EXTENDED_META
+
+    body = bytearray()
+    body += struct.pack(
         "<HBBHH",
         MAGIC,
-        VERSION,
+        version & 0xFF,
         flags & 0xFF,
-        node_count & 0xFFFF,
+        len(nodes) & 0xFFFF,
         sequence_id & 0xFFFF,
     )
 
+    for n in nodes:
+        for c in n.pos:
+            _check_finite(c)
+        if embodied:
+            body += struct.pack(
+                "<HBB3f3ff",
+                n.node_id & 0xFFFF,
+                n.risk_state & 0xFF,
+                n.sub_system & 0xFF,
+                float(n.pos[0]),
+                float(n.pos[1]),
+                float(n.pos[2]),
+                float(n.vel[0]),
+                float(n.vel[1]),
+                float(n.vel[2]),
+                float(n.phase),
+            )
+        else:
+            body += struct.pack(
+                CORE_FMT,
+                n.node_id & 0xFFFF,
+                n.level & 0xFF,
+                n.type_code & 0xFF,
+                float(n.pos[0]),
+                float(n.pos[1]),
+                float(n.pos[2]),
+                n.rgb[0] & 0xFF,
+                n.rgb[1] & 0xFF,
+                n.rgb[2] & 0xFF,
+                n.node_flags & 0xFF,
+                float(n.param0),
+            )
+        if extended_meta:
+            body += struct.pack("<fBxxx", float(n.resonance_freq), n.causal_depth & 0xFF)
 
-def _unpack_header(data: bytes, offset: int = 0):
-    magic, version, flags, node_count, sequence_id = struct.unpack_from(
-        "<HBBHH", data, offset
-    )
-    if magic != MAGIC:
-        raise ValueError(f"bad magic: 0x{magic:04X}")
-    if version != VERSION:
-        raise ValueError(f"unsupported version: 0x{version:02X}")
-    return flags, node_count, sequence_id, offset + 8
+    if cons:
+        body += struct.pack("<H", len(cons) & 0xFFFF)
+        for c in cons:
+            body += struct.pack(
+                "<BBHHffH",
+                c.ctype & 0xFF,
+                0,
+                c.node_a & 0xFFFF,
+                c.node_b & 0xFFFF,
+                float(c.param0),
+                float(c.param1),
+                0,
+            )
 
+    if len(body) + 4 > MAX_FRAME_SIZE:
+        raise ProtocolError("MAX_FRAME_SIZE exceeded")
 
-def pack_core_node(n: CoreNode) -> bytes:
-    tc = TYPE_CODES.get(n.type_name, 0)
-    # 24 bytes: H B B + 3f + 4B + f
-    return struct.pack(
-        "<HBB3f4Bf",
-        n.node_id & 0xFFFF,
-        n.level & 0xFF,
-        tc & 0xFF,
-        float(n.x),
-        float(n.y),
-        float(n.z),
-        n.r & 0xFF,
-        n.g & 0xFF,
-        n.b & 0xFF,
-        n.flags & 0xFF,
-        float(n.param0),
-    )
-
-
-def unpack_core_node(data: bytes, offset: int) -> Tuple[CoreNode, int]:
-    node_id, level, tc, x, y, z, r, g, b, flags, param0 = struct.unpack_from(
-        "<HBB3f4Bf", data, offset
-    )
-    return (
-        CoreNode(
-            node_id=node_id,
-            level=level,
-            type_name=TYPE_NAMES.get(tc, f"type_{tc}"),
-            x=x,
-            y=y,
-            z=z,
-            r=r,
-            g=g,
-            b=b,
-            flags=flags,
-            param0=param0,
-        ),
-        offset + CORE_NODE_SIZE,
-    )
-
-
-def pack_embodied_node(n: EmbodiedNode) -> bytes:
-    """32 bytes: HBB + pos(3f) + vel(3f) + phase(f)."""
-    px, py, pz = n.pos
-    vx, vy, vz = n.vel
-    blob = struct.pack(
-        "<HBB3f3ff",
-        n.node_id & 0xFFFF,
-        n.risk_state & 0xFF,
-        n.sub_system & 0xFF,
-        float(px),
-        float(py),
-        float(pz),
-        float(vx),
-        float(vy),
-        float(vz),
-        float(n.phase_angle),
-    )
-    assert len(blob) == EMBODIED_NODE_SIZE
-    return blob
-
-
-def unpack_embodied_node(data: bytes, offset: int) -> Tuple[EmbodiedNode, int]:
-    node_id, risk, sub, px, py, pz, vx, vy, vz, phase = struct.unpack_from(
-        "<HBB3f3ff", data, offset
-    )
-    return (
-        EmbodiedNode(
-            node_id=node_id,
-            risk_state=risk,
-            sub_system=sub,
-            pos=(px, py, pz),
-            vel=(vx, vy, vz),
-            phase_angle=phase,
-        ),
-        offset + EMBODIED_NODE_SIZE,
-    )
-
-
-def pack_packet(pkt: PlodPacket, with_crc: bool = True) -> bytes:
-    embodied = bool(pkt.flags & FLAG_EMBODIED_PROFILE)
-    nodes = pkt.embodied_nodes if embodied else pkt.core_nodes
-    node_count = len(nodes)
-
-    flags = pkt.flags
-    if pkt.edges:
-        flags |= FLAG_TOPOLOGY_INLINE
-    if pkt.we_blob:
-        flags |= FLAG_WE_PRESENT
-
-    body = bytearray()
-    body += _pack_header(node_count, flags, pkt.sequence_id)
-
-    if embodied:
-        for n in pkt.embodied_nodes:
-            body += pack_embodied_node(n)
-    else:
-        for n in pkt.core_nodes:
-            body += pack_core_node(n)
-
-    if flags & FLAG_TOPOLOGY_INLINE:
-        body += struct.pack("<H", len(pkt.edges) & 0xFFFF)
-        for a, b in pkt.edges:
-            body += struct.pack("<HH", a & 0xFFFF, b & 0xFFFF)
-
-    if flags & FLAG_WE_PRESENT:
-        blob = pkt.we_blob or b""
-        body += struct.pack("<I", len(blob))
-        body += blob
-
-    if with_crc:
-        crc = zlib.crc32(bytes(body)) & 0xFFFFFFFF
-        body += struct.pack("<I", crc)
-
+    crc = zlib.crc32(bytes(body)) & 0xFFFFFFFF
+    body += struct.pack("<I", crc)
     return bytes(body)
 
 
-def unpack_packet(data: bytes, expect_crc: bool = True) -> PlodPacket:
-    flags, node_count, sequence_id, off = _unpack_header(data)
-    embodied = bool(flags & FLAG_EMBODIED_PROFILE)
+def decode_frame(data: bytes) -> DecodedFrame:
+    if len(data) < 12:
+        raise ProtocolError("frame too short")
+    if len(data) > MAX_FRAME_SIZE:
+        raise ProtocolError("MAX_FRAME_SIZE exceeded")
 
-    core_nodes: List[CoreNode] = []
-    embodied_nodes: List[EmbodiedNode] = []
+    magic, ver, flags, count, seq = struct.unpack_from("<HBBHH", data, 0)
+    if magic != MAGIC:
+        raise ProtocolError(f"bad MAGIC {magic:#x}")
+    if ver not in (VERSION_V10, VERSION_V11):
+        raise ProtocolError(f"unknown VERSION {ver:#x}")
+    if count > MAX_SE_NODES:
+        raise ProtocolError("SE_NODE_COUNT exceeds MAX_SE_NODES")
 
-    if embodied:
-        for _ in range(node_count):
-            node, off = unpack_embodied_node(data, off)
-            embodied_nodes.append(node)
-    else:
-        for _ in range(node_count):
-            node, off = unpack_core_node(data, off)
-            core_nodes.append(node)
+    embodied = bool(flags & FLAG_IS_EMBODIED_PROFILE)
+    has_meta = bool(flags & FLAG_HAS_EXTENDED_META)
+    has_ct = bool(flags & FLAG_HAS_CONSTRAINT_TABLE)
+    base = EMBODIED_SIZE if embodied else CORE_SIZE
 
-    edges: List[Tuple[int, int]] = []
-    if flags & FLAG_TOPOLOGY_INLINE:
-        (edge_count,) = struct.unpack_from("<H", data, off)
-        off += 2
-        for _ in range(edge_count):
-            a, b = struct.unpack_from("<HH", data, off)
-            edges.append((a, b))
-            off += 4
-
-    we_blob = None
-    if flags & FLAG_WE_PRESENT:
-        (blen,) = struct.unpack_from("<I", data, off)
-        off += 4
-        we_blob = data[off : off + blen]
-        off += blen
-
-    if expect_crc:
-        if off + 4 > len(data):
-            raise ValueError("missing CRC trailer")
-        (crc_read,) = struct.unpack_from("<I", data, off)
-        crc_calc = zlib.crc32(data[:off]) & 0xFFFFFFFF
-        if crc_read != crc_calc:
-            raise ValueError(
-                f"CRC mismatch: got 0x{crc_read:08X}, expected 0x{crc_calc:08X}"
+    off = 8
+    nodes: List[SENode] = []
+    for _ in range(count):
+        need = base + (META_SIZE if has_meta else 0)
+        if off + need > len(data) - 4:
+            raise ProtocolError("truncated node table")
+        if embodied:
+            nid, risk, sub, px, py, pz, vx, vy, vz, phase = struct.unpack_from(
+                "<HBB3f3ff", data, off
             )
+            off += EMBODIED_SIZE
+            for v, name in ((px, "x"), (py, "y"), (pz, "z")):
+                _check_finite(v, name)
+            node = SENode(
+                nid,
+                (px, py, pz),
+                risk_state=risk,
+                sub_system=sub,
+                vel=(vx, vy, vz),
+                phase=phase,
+            )
+        else:
+            nid, level, tcode, px, py, pz, r, g, b, nfl, p0 = struct.unpack_from(
+                CORE_FMT, data, off
+            )
+            off += CORE_SIZE
+            for v, name in ((px, "x"), (py, "y"), (pz, "z")):
+                _check_finite(v, name)
+            node = SENode(
+                nid,
+                (px, py, pz),
+                level=level,
+                type_code=tcode,
+                rgb=(r, g, b),
+                node_flags=nfl,
+                param0=p0,
+            )
+        if has_meta:
+            freq, depth = struct.unpack_from("<fB", data, off)
+            pad = data[off + 5 : off + 8]
+            if pad != b"\x00\x00\x00":
+                raise ProtocolError("Extended Meta pad must be zero")
+            off += META_SIZE
+            node.resonance_freq = freq
+            node.causal_depth = depth
+        nodes.append(node)
 
-    return PlodPacket(
-        sequence_id=sequence_id,
+    id_set = {n.node_id for n in nodes}
+    constraints: List[Constraint] = []
+    if has_ct:
+        if off + 2 > len(data) - 4:
+            raise ProtocolError("truncated constraint count")
+        (m,) = struct.unpack_from("<H", data, off)
+        off += 2
+        if m > MAX_CONSTRAINTS:
+            raise ProtocolError("too many constraints")
+        for _ in range(m):
+            if off + CONSTRAINT_SIZE > len(data) - 4:
+                raise ProtocolError("truncated constraint entry")
+            ctype, cflags, a, b, p0, p1, reserved = struct.unpack_from(
+                "<BBHHffH", data, off
+            )
+            off += CONSTRAINT_SIZE
+            if cflags != 0 or reserved != 0:
+                raise ProtocolError("constraint reserved/cflags must be zero")
+            if a != GLOBAL_NA and a not in id_set:
+                raise ProtocolError(f"constraint node_a {a} out of SE set")
+            if b != GLOBAL_NA and b not in id_set:
+                raise ProtocolError(f"constraint node_b {b} out of SE set")
+            constraints.append(Constraint(ctype, a, b, p0, p1))
+
+    if off + 4 > len(data):
+        raise ProtocolError("missing CRC32")
+    if off + 4 != len(data):
+        raise ProtocolError("trailing garbage bytes")
+
+    crc_stored = struct.unpack_from("<I", data, off)[0]
+    crc_calc = zlib.crc32(data[:off]) & 0xFFFFFFFF
+    if crc_stored != crc_calc:
+        raise ProtocolError("CRC32 mismatch (CRC-32/ISO-HDLC)")
+
+    return DecodedFrame(
+        version=ver,
         flags=flags,
-        core_nodes=core_nodes,
-        embodied_nodes=embodied_nodes,
-        edges=edges,
-        we_blob=we_blob,
+        sequence_id=seq,
+        nodes=nodes,
+        constraints=constraints,
+        raw_size=len(data),
     )
 
 
-def _self_test() -> None:
-    # Core profile: 3 nodes + edges (like a tiny triangle)
-    core = PlodPacket(
-        sequence_id=1,
-        flags=0,
-        core_nodes=[
-            CoreNode(1, 1, "end", 0.0, 1.0, 0.0),
-            CoreNode(2, 1, "end", -1.0, 0.0, 0.0),
-            CoreNode(3, 1, "end", 1.0, 0.0, 0.0),
-        ],
-        edges=[(1, 2), (1, 3), (2, 3)],
-    )
-    raw = pack_packet(core)
-    back = unpack_packet(raw)
-    assert len(back.core_nodes) == 3
-    assert back.edges == [(1, 2), (1, 3), (2, 3)]
-    assert abs(back.core_nodes[0].y - 1.0) < 1e-6
-
-    # Embodied profile: 2 nodes
-    emb = PlodPacket(
-        sequence_id=7,
-        flags=FLAG_EMBODIED_PROFILE | FLAG_FORWARD_FOCUS,
-        embodied_nodes=[
-            EmbodiedNode(
-                node_id=10,
-                risk_state=0,
-                sub_system=0x20,
-                pos=(1.0, 0.0, 0.5),
-                vel=(0.1, 0.0, 0.0),
-                phase_angle=0.25,
-            ),
-            EmbodiedNode(
-                node_id=11,
-                risk_state=1,
-                sub_system=0x10,
-                pos=(1.2, 0.1, 0.8),
-                vel=(0.0, 0.05, 0.0),
-                phase_angle=-0.1,
-            ),
-        ],
-    )
-    raw2 = pack_packet(emb)
-    back2 = unpack_packet(raw2)
-    assert len(back2.embodied_nodes) == 2
-    assert back2.embodied_nodes[1].risk_state == 1
-    assert back2.flags & FLAG_EMBODIED_PROFILE
-    assert len(pack_embodied_node(emb.embodied_nodes[0])) == 32
-
-    print("self-test OK")
-    print(f"  core packet size:     {len(raw)} bytes")
-    print(f"  embodied packet size: {len(raw2)} bytes")
-
-
-def _demo_size() -> None:
-    """Show SE-Frame size for N embodied nodes (Spec §7 style)."""
-    n = 80
+def demo() -> None:
     nodes = [
-        EmbodiedNode(
-            i,
-            risk_state=0,
-            sub_system=0x30,
-            pos=(float(i) * 0.01, 0.0, 0.0),
-        )
-        for i in range(n)
+        SENode(0, (1.0, 0.0, 0.0)),
+        SENode(1, (0.0, 1.0, 0.0)),
+        SENode(2, (-1.0, 0.0, 0.0)),
+        SENode(3, (0.0, -1.0, 0.0)),
     ]
-    pkt = PlodPacket(
-        sequence_id=0,
-        flags=FLAG_EMBODIED_PROFILE,
-        embodied_nodes=nodes,
-    )
-    raw = pack_packet(pkt, with_crc=True)
-    print(f"Embodied SE-Frame: {n} nodes")
-    print(f"  packed size = {len(raw)} bytes ({len(raw)/1024:.2f} KB)")
-    print(f"  (header 8 + {n}*32 + crc 4 = {8 + n * 32 + 4} without topology)")
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser(description="P-LOD Spec v1.0 reference codec")
-    ap.add_argument("--demo", action="store_true", help="print 80-node embodied frame size")
-    args = ap.parse_args()
-    _self_test()
-    if args.demo:
-        _demo_size()
+    cons = [
+        Constraint(0x01, 0, 1, 2.5),
+        Constraint(0x02, GLOBAL_NA, GLOBAL_NA, 1.75),
+    ]
+    blob = encode_frame(nodes, constraints=cons, embodied=False, extended_meta=False)
+    fr = decode_frame(blob)
+    print("=== plod_spec_codec v1.1 demo ===")
+    print(f"encoded {len(blob)} bytes  flags=0x{fr.flags:02x}  nodes={len(fr.nodes)}  constraints={len(fr.constraints)}")
+    print("decode_frame OK (CRC enforced)")
 
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--demo", action="store_true")
+    args = ap.parse_args()
+    if args.demo:
+        demo()
+    else:
+        demo()
