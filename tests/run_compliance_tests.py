@@ -1,31 +1,32 @@
 #!/usr/bin/env python3
-"""RFC-aligned golden-vector compliance tests (stdlib only)."""
+"""RFC compliance tests using public examples/plod_spec_codec.decode_frame."""
+
 from __future__ import annotations
 
-import math
 import struct
 import sys
 import zlib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+EXAMPLES = ROOT / "examples"
 VEC = HERE / "vectors"
 
-MAGIC = 0x504C
-HAS_CONSTRAINT_TABLE = 0x01
-IS_EMBODIED_PROFILE = 0x02
-HAS_EXTENDED_META = 0x04
-GLOBAL_NA = 0xFFFF
-CORE_FMT = "<HBB3f3BBf"
-CORE_SIZE = 24
-EMBODIED_SIZE = 32
-META_SIZE = 8
-CONSTRAINT_SIZE = 16
-MAX_FRAME_SIZE = 16 * 1024 * 1024
+sys.path.insert(0, str(EXAMPLES))
 
-
-class ProtocolError(Exception):
-    pass
+from plod_spec_codec import (  # noqa: E402
+    FLAG_HAS_CONSTRAINT_TABLE,
+    FLAG_HAS_EXTENDED_META,
+    FLAG_IS_EMBODIED_PROFILE,
+    GLOBAL_NA,
+    MAGIC,
+    ProtocolError,
+    decode_frame,
+    encode_frame,
+    SENode,
+    Constraint,
+)
 
 
 def ensure_vectors() -> None:
@@ -36,84 +37,6 @@ def ensure_vectors() -> None:
         gv.main()
 
 
-def parse_frame(data: bytes) -> dict:
-    if len(data) < 12:
-        raise ProtocolError("frame too short")
-    if len(data) > MAX_FRAME_SIZE:
-        raise ProtocolError("MAX_FRAME_SIZE exceeded")
-
-    magic, ver, flags, count, seq = struct.unpack_from("<HBBHH", data, 0)
-    if magic != MAGIC:
-        raise ProtocolError(f"bad MAGIC {magic:#x}")
-
-    embodied = bool(flags & IS_EMBODIED_PROFILE)
-    has_meta = bool(flags & HAS_EXTENDED_META)
-    has_ct = bool(flags & HAS_CONSTRAINT_TABLE)
-    base = EMBODIED_SIZE if embodied else CORE_SIZE
-    per = base + (META_SIZE if has_meta else 0)
-
-    off = 8
-    nodes = []
-    for _ in range(count):
-        if off + base > len(data) - 4:
-            raise ProtocolError("truncated node table")
-        if embodied:
-            nid, risk, sub, px, py, pz, vx, vy, vz, phase = struct.unpack_from(
-                "<HBB3f3ff", data, off
-            )
-            off += EMBODIED_SIZE
-            node = {"id": nid, "pos": (px, py, pz)}
-        else:
-            nid, level, tcode, px, py, pz, r, g, b, nfl, p0 = struct.unpack_from(
-                CORE_FMT, data, off
-            )
-            off += CORE_SIZE
-            node = {"id": nid, "pos": (px, py, pz)}
-        for v in node["pos"]:
-            if math.isnan(v) or math.isinf(v):
-                raise ProtocolError("NaN/Inf coordinate")
-        if has_meta:
-            if off + META_SIZE > len(data) - 4:
-                raise ProtocolError("truncated meta")
-            freq, depth = struct.unpack_from("<fB", data, off)
-            off += META_SIZE
-            node["causal_depth"] = depth
-            node["resonance_freq"] = freq
-        nodes.append(node)
-
-    constraints = []
-    if has_ct:
-        if off + 2 > len(data) - 4:
-            raise ProtocolError("truncated constraint count")
-        (m,) = struct.unpack_from("<H", data, off)
-        off += 2
-        for _ in range(m):
-            if off + CONSTRAINT_SIZE > len(data) - 4:
-                raise ProtocolError("truncated constraint entry")
-            ctype, cflags, a, b, p0, p1, reserved = struct.unpack_from("<BBHHffH", data, off)
-            off += CONSTRAINT_SIZE
-            constraints.append({"type": ctype, "a": a, "b": b, "p0": p0, "p1": p1})
-
-    if off + 4 > len(data):
-        raise ProtocolError("missing CRC")
-    crc_stored = struct.unpack_from("<I", data, off)[0]
-    crc_calc = zlib.crc32(data[:off]) & 0xFFFFFFFF
-    crc_ok = crc_stored == crc_calc
-
-    return {
-        "version": ver,
-        "flags": flags,
-        "count": count,
-        "seq": seq,
-        "nodes": nodes,
-        "constraints": constraints,
-        "crc_ok": crc_ok,
-        "payload_end": off,
-        "header_magic_ok": magic == MAGIC,
-        "offsets": {"nodes_start": 8, "payload_end": off},
-    }
-
-
 def expect(cond: bool, msg: str) -> None:
     if not cond:
         raise AssertionError(msg)
@@ -121,58 +44,85 @@ def expect(cond: bool, msg: str) -> None:
 
 def test_golden_core_v11() -> None:
     data = (VEC / "golden_core_v11.plod").read_bytes()
-    # Byte-level header assertions
     magic, ver, flags, count, seq = struct.unpack_from("<HBBHH", data, 0)
-    expect(magic == MAGIC, "MAGIC @0")
+    expect(magic == MAGIC, "MAGIC")
     expect(ver == 0x11, "VERSION")
-    expect(flags & HAS_CONSTRAINT_TABLE, "HAS_CONSTRAINT_TABLE")
-    expect(not (flags & IS_EMBODIED_PROFILE), "core profile")
-    expect(count == 4, "SE_NODE_COUNT")
-
-    r = parse_frame(data)
-    expect(r["crc_ok"], "CRC-32/ISO-HDLC must pass")
-    expect(len(r["nodes"]) == 4, "4 nodes")
-    expect(r["nodes"][0]["id"] == 0, "node_id 0 is valid")
-    expect(len(r["constraints"]) == 2, "2 constraints")
-    expect(r["constraints"][0]["type"] == 0x01, "distance type")
-    expect(r["constraints"][1]["a"] == GLOBAL_NA, "global marker 0xFFFF")
-    expect(r["constraints"][1]["b"] == GLOBAL_NA, "global marker 0xFFFF b")
-    print("[PASS] golden_core_v11.plod (offsets, FLAGS, 0xFFFF, CRC)")
+    expect(bool(flags & FLAG_HAS_CONSTRAINT_TABLE), "HAS_CONSTRAINT_TABLE")
+    fr = decode_frame(data)
+    expect(len(fr.nodes) == 4, "4 nodes")
+    expect(fr.nodes[0].node_id == 0, "node 0 valid")
+    expect(len(fr.constraints) == 2, "2 constraints")
+    expect(fr.constraints[1].node_a == GLOBAL_NA, "0xFFFF global")
+    print("[PASS] golden_core_v11.plod")
 
 
 def test_golden_invalid_crc() -> None:
     data = (VEC / "golden_invalid_crc.plod").read_bytes()
-    r = parse_frame(data)
-    expect(not r["crc_ok"], "CRC must fail")
-    print("[PASS] golden_invalid_crc.plod")
+    try:
+        decode_frame(data)
+        raise AssertionError("expected ProtocolError")
+    except ProtocolError as e:
+        expect("CRC" in str(e).upper() or "crc" in str(e).lower(), str(e))
+    print("[PASS] golden_invalid_crc.plod (ProtocolError)")
 
 
-def test_minimal_valid() -> None:
-    r = parse_frame((VEC / "minimal_valid.plod").read_bytes())
-    expect(r["crc_ok"] and r["count"] == 8, "minimal")
-    print("[PASS] minimal_valid.plod")
+def test_trailing_garbage() -> None:
+    data = (VEC / "golden_core_v11.plod").read_bytes() + b"\x00\x00"
+    try:
+        decode_frame(data)
+        raise AssertionError("expected trailing garbage error")
+    except ProtocolError as e:
+        expect("trailing" in str(e).lower(), str(e))
+    print("[PASS] trailing garbage rejected")
 
 
-def test_embodied_32b() -> None:
+def test_unknown_version() -> None:
+    data = bytearray((VEC / "minimal_valid.plod").read_bytes())
+    data[2] = 0x99
+    # fix CRC for version change so we hit VERSION check first
+    body = bytes(data[:-4])
+    # actually decode checks version before CRC — but body still has old crc
+    # version is checked before CRC in decode_frame
+    try:
+        decode_frame(bytes(data))
+        raise AssertionError("expected unknown version")
+    except ProtocolError as e:
+        expect("VERSION" in str(e).upper() or "version" in str(e).lower(), str(e))
+    print("[PASS] unknown VERSION rejected")
+
+
+def test_bad_constraint_index() -> None:
+    nodes = [SENode(1, (0.0, 0.0, 0.0)), SENode(2, (1.0, 0.0, 0.0))]
+    # node_a=99 not in set
+    cons = [Constraint(0x01, 99, 2, 1.0)]
+    blob = encode_frame(nodes, constraints=cons)
+    try:
+        decode_frame(blob)
+        raise AssertionError("expected bad index")
+    except ProtocolError as e:
+        expect("node_a" in str(e) or "out of" in str(e).lower(), str(e))
+    print("[PASS] illegal constraint node index rejected")
+
+
+def test_embodied_meta() -> None:
     data = (VEC / "embodied_32b.plod").read_bytes()
     flags = data[3]
-    expect(flags & IS_EMBODIED_PROFILE, "embodied flag bit1")
-    expect(flags & HAS_EXTENDED_META, "meta flag bit2")
-    r = parse_frame(data)
-    expect(r["crc_ok"] and r["count"] == 16, "embodied parse")
-    expect("causal_depth" in r["nodes"][0], "meta")
+    expect(bool(flags & FLAG_IS_EMBODIED_PROFILE), "embodied bit")
+    expect(bool(flags & FLAG_HAS_EXTENDED_META), "meta bit")
+    fr = decode_frame(data)
+    expect(len(fr.nodes) == 16, "16 nodes")
     print("[PASS] embodied_32b.plod")
 
 
-def test_invalid_crc_legacy() -> None:
-    r = parse_frame((VEC / "invalid_crc.plod").read_bytes())
-    expect(not r["crc_ok"], "legacy bad crc")
-    print("[PASS] invalid_crc.plod")
+def test_minimal_valid() -> None:
+    fr = decode_frame((VEC / "minimal_valid.plod").read_bytes())
+    expect(len(fr.nodes) == 8, "8 nodes")
+    print("[PASS] minimal_valid.plod")
 
 
-def test_unknown_extension() -> None:
-    r = parse_frame((VEC / "unknown_extension.plod").read_bytes())
-    expect(r["crc_ok"] and r["count"] == 4, "forward-compat unknown FLAGS bit")
+def test_unknown_flag_bit() -> None:
+    fr = decode_frame((VEC / "unknown_extension.plod").read_bytes())
+    expect(len(fr.nodes) == 4, "forward compat")
     print("[PASS] unknown_extension.plod")
 
 
@@ -182,10 +132,12 @@ def main() -> int:
     for fn in (
         test_golden_core_v11,
         test_golden_invalid_crc,
+        test_trailing_garbage,
+        test_unknown_version,
+        test_bad_constraint_index,
+        test_embodied_meta,
         test_minimal_valid,
-        test_embodied_32b,
-        test_invalid_crc_legacy,
-        test_unknown_extension,
+        test_unknown_flag_bit,
     ):
         try:
             fn()

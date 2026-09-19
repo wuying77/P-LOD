@@ -3,25 +3,28 @@
 P-LOD Horizon Compression Demo — Ablation-based SE extraction (stdlib only)
 
 Score(p) = w1*Density + w2*Curvature + w3*AblationLoss
-causal_depth(i) ∝ Δ Reconstruction Error when node i is removed.
 
-Wire FLAGS (Spec v1.1): IS_EMBODIED_PROFILE=0x02, HAS_EXTENDED_META=0x04
+Formal causal_depth:
+  ΔE_i = E_without_i - E_full
+  causal_depth_i = round(255 * clamp(ΔE_i / max_j(ΔE_j), 0, 1))
+  depth >= 200 → Causal Anchor
 
-Usage:
-  python horizon_compression_demo.py
+Wire: Spec v1.1 via plod_spec_codec.encode_frame
 """
 
 from __future__ import annotations
 
 import math
 import random
-import struct
-import zlib
+import sys
+from pathlib import Path
 from typing import List, Sequence, Tuple
 
-MAGIC = 0x504C
-IS_EMBODIED_PROFILE = 0x02
-HAS_EXTENDED_META = 0x04
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+
+from plod_spec_codec import SENode, encode_frame
 
 Point = Tuple[float, float, float]
 
@@ -76,8 +79,7 @@ def local_curvature_proxy(centroid: Point, bucket: Sequence[Point]) -> float:
     mx = sum(d[0] for d in dirs) / len(dirs)
     my = sum(d[1] for d in dirs) / len(dirs)
     mz = sum(d[2] for d in dirs) / len(dirs)
-    var = sum((d[0] - mx) ** 2 + (d[1] - my) ** 2 + (d[2] - mz) ** 2 for d in dirs) / len(dirs)
-    return var
+    return sum((d[0] - mx) ** 2 + (d[1] - my) ** 2 + (d[2] - mz) ** 2 for d in dirs) / len(dirs)
 
 
 def nn_recon_error(anchors: Sequence[Point], cloud: Sequence[Point], sample: int = 400) -> float:
@@ -110,15 +112,15 @@ def extract_se_ablation(
     w_density: float = 0.25,
     w_curvature: float = 0.25,
     w_ablation: float = 0.50,
-) -> List[dict]:
+) -> List[SENode]:
     cells = density_map(pts, grid)
     cands: List[dict] = []
     dens_max = max(len(b) for b in cells.values()) or 1
-    for key, bucket in cells.items():
+    for bucket in cells.values():
         c = cell_centroid(bucket)
         dens = len(bucket) / dens_max
         curv = local_curvature_proxy(c, bucket)
-        cands.append({"pos": c, "density": dens, "curvature": curv, "bucket_n": len(bucket)})
+        cands.append({"pos": c, "density": dens, "curvature": curv})
 
     for c in cands:
         c["pre"] = 0.5 * c["density"] + 0.5 * min(1.0, c["curvature"] * 2.0)
@@ -129,37 +131,27 @@ def extract_se_ablation(
 
     print("=== Ablation-based SE extraction ===")
     print(f"Volume points:     {len(pts):,}")
-    print(f"Occupied cells:    {len(cells)}")
-    print(f"Ablation pool:     {len(pool)} candidates")
-    print(f"Base recon error:  {base_err:.6f} (all pool anchors)")
+    print(f"Ablation pool:     {len(pool)}")
+    print(f"E_full (base):     {base_err:.6f}")
 
-    deltas = []
     for i in range(len(pool)):
-        dE = ablation_delta(anchors, pts, i, base_err)
-        pool[i]["ablation"] = dE
-        deltas.append(dE)
+        pool[i]["delta_e"] = ablation_delta(anchors, pts, i, base_err)
 
-    d_max = max(deltas) if deltas else 1.0
-    if d_max < 1e-12:
-        d_max = 1.0
+    max_de = max(c["delta_e"] for c in pool) or 1.0
 
     for c in pool:
-        ab_n = c["ablation"] / d_max
+        # Formal Spec formula:
+        # causal_depth_i = round(255 * clamp(ΔE_i / max_j(ΔE_j), 0, 1))
+        ratio = max(0.0, min(1.0, c["delta_e"] / max_de))
+        c["causal_depth"] = int(round(255 * ratio))
         c["score"] = (
             w_density * c["density"]
             + w_curvature * min(1.0, c["curvature"] * 2.0)
-            + w_ablation * ab_n
+            + w_ablation * ratio
         )
-        c["causal_depth"] = int(min(255, round(ab_n * 255)))
 
     pool.sort(key=lambda x: x["score"], reverse=True)
     selected = pool[:max_nodes]
-
-    if selected:
-        top_ab = max(c["ablation"] for c in selected) or 1.0
-        for c in selected:
-            ab_n = c["ablation"] / top_ab
-            c["causal_depth"] = int(min(255, 80 + round(ab_n * 175)))
 
     print(f"Selected SE nodes: {len(selected)}")
     print(
@@ -169,70 +161,44 @@ def extract_se_ablation(
     n_anchor = sum(1 for c in selected if c["causal_depth"] >= 200)
     print(f"Causal Anchors (depth>=200): {n_anchor}")
     print()
-    print("Top 8 by score (ablation-driven):")
+    print("Top 8 (ablation ΔE / formal causal_depth):")
     for i, c in enumerate(selected[:8], 1):
         x, y, z = c["pos"]
         print(
-            f"  #{i:02d}  score={c['score']:.4f}  ablationΔE={c['ablation']:.6f}  "
-            f"depth={c['causal_depth']:3d}  dens={c['density']:.3f}  "
-            f"pos=({x:+.3f},{y:+.3f},{z:+.3f})"
+            f"  #{i:02d}  ΔE={c['delta_e']:.6f}  depth={c['causal_depth']:3d}  "
+            f"score={c['score']:.4f}  pos=({x:+.3f},{y:+.3f},{z:+.3f})"
         )
 
-    nodes = []
+    nodes: List[SENode] = []
     for i, c in enumerate(selected):
         nodes.append(
-            {
-                "id": i + 1,
-                "pos": c["pos"],
-                "causal_depth": c["causal_depth"],
-                "resonance_freq": 1.0 + 0.05 * (i % 17),
-                "ablation": c["ablation"],
-                "score": c["score"],
-            }
+            SENode(
+                i + 1,
+                c["pos"],
+                risk_state=1 if c["causal_depth"] >= 200 else 0,
+                sub_system=0x10 if c["causal_depth"] >= 200 else 0x30,
+                resonance_freq=1.0 + 0.05 * (i % 17),
+                causal_depth=c["causal_depth"],
+            )
         )
     return nodes
-
-
-def pack_embodied(nodes: List[dict]) -> bytes:
-    flags = IS_EMBODIED_PROFILE | HAS_EXTENDED_META
-    body = bytearray()
-    body += struct.pack("<HBBHH", MAGIC, 0x11, flags, len(nodes) & 0xFFFF, 1)
-    for n in nodes:
-        x, y, z = n["pos"]
-        risk = 1 if n["causal_depth"] >= 200 else 0
-        body += struct.pack(
-            "<HBB3f3ff",
-            n["id"] & 0xFFFF,
-            risk,
-            0x10 if n["causal_depth"] >= 200 else 0x30,
-            float(x),
-            float(y),
-            float(z),
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-        )
-        body += struct.pack("<fBxxx", float(n["resonance_freq"]), n["causal_depth"] & 0xFF)
-    body += struct.pack("<I", zlib.crc32(bytes(body)) & 0xFFFFFFFF)
-    return bytes(body)
 
 
 def main() -> None:
     pts = generate_volume(10_000)
     raw = len(pts) * 24 + 64
     nodes = extract_se_ablation(pts, max_nodes=80)
-    frame = pack_embodied(nodes)
+    frame = encode_frame(nodes, embodied=True, extended_meta=True)
     ratio = raw / max(len(frame), 1)
 
     print()
     print("=== Horizon compression (ablation SE) ===")
     print(f"Raw dense estimate:  {raw:,} bytes ({raw/1024:.1f} KB)")
     print(f"SE-Frame:            {len(frame):,} bytes ({len(frame)/1024:.2f} KB)")
-    print(f"Collapse ratio:      {ratio:.1f}×  (~{(1 - len(frame)/raw)*100:.2f}% smaller)")
+    print(f"Collapse ratio:      {ratio:.1f}×")
     print()
-    print("Definition: causal_depth(i) ∝ ΔE when node i is ablated from the skeleton.")
-    print("High ΔE → irreplaceable Strong-Entanglement / Causal Anchor.")
+    print("causal_depth_i = round(255 * clamp(ΔE_i / max(ΔE), 0, 1))")
+    print("ΔE_i = E_without_i - E_full")
 
 
 if __name__ == "__main__":
