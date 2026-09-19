@@ -1,17 +1,9 @@
 #!/usr/bin/env python3
 """
-P-LOD Spec v1.1 public codec (stdlib only) — single source of truth for pack/decode.
+P-LOD Spec v1.1 public codec (stdlib only).
 
-FLAGS (Little-Endian):
-  HAS_CONSTRAINT_TABLE = 0x01
-  IS_EMBODIED_PROFILE  = 0x02
-  HAS_EXTENDED_META    = 0x04
-
-Rejects: bad MAGIC/VERSION, CRC mismatch, trailing garbage, duplicate node_id,
-non-finite floats (pos/vel/phase/param0/resonance_freq/constraint params).
-
-Usage:
-  python plod_spec_codec.py --demo
+Strict encoding: no silent &0xFF truncation — out-of-range values raise ProtocolError.
+node_id 0..65534 only (0xFFFF reserved as GLOBAL_NA).
 """
 
 from __future__ import annotations
@@ -32,9 +24,11 @@ FLAG_IS_EMBODIED_PROFILE = 1 << 1
 FLAG_HAS_EXTENDED_META = 1 << 2
 
 GLOBAL_NA = 0xFFFF
+MAX_NODE_ID = 65534  # 0xFFFF reserved
 MAX_SE_NODES = 65535
 MAX_CONSTRAINTS = 65535
 MAX_FRAME_SIZE = 16 * 1024 * 1024
+MAX_U16 = 65535
 
 CORE_FMT = "<HBB3f3BBf"
 CORE_SIZE = 24
@@ -44,7 +38,7 @@ CONSTRAINT_SIZE = 16
 
 
 class ProtocolError(Exception):
-    """Mandatory rejection path for non-compliant frames."""
+    pass
 
 
 @dataclass
@@ -88,10 +82,40 @@ def _check_finite(x: float, field_name: str) -> None:
         raise ProtocolError(f"Invalid non-finite float detected in [{field_name}]")
 
 
+def _require_int_range(val: int, lo: int, hi: int, name: str) -> None:
+    if not isinstance(val, int) or isinstance(val, bool):
+        raise ProtocolError(f"{name} must be int, got {type(val).__name__}")
+    if val < lo or val > hi:
+        raise ProtocolError(f"{name}={val} out of range [{lo}..{hi}]")
+
+
 def _assert_unique_node_ids(nodes: Sequence[SENode]) -> None:
     ids = [n.node_id for n in nodes]
     if len(ids) != len(set(ids)):
         raise ProtocolError("Duplicate node_id detected in SE Node Table")
+
+
+def _validate_node_for_encode(n: SENode, embodied: bool) -> None:
+    _require_int_range(n.node_id, 0, MAX_NODE_ID, "node_id")  # excludes 0xFFFF
+    _check_finite(n.pos[0], "pos.x")
+    _check_finite(n.pos[1], "pos.y")
+    _check_finite(n.pos[2], "pos.z")
+    if embodied:
+        _require_int_range(n.risk_state, 0, 2, "risk_state")
+        _require_int_range(n.sub_system, 0, 255, "sub_system")
+        _check_finite(n.vel[0], "vel.x")
+        _check_finite(n.vel[1], "vel.y")
+        _check_finite(n.vel[2], "vel.z")
+        _check_finite(n.phase, "phase")
+    else:
+        _require_int_range(n.level, 1, 3, "level")
+        _require_int_range(n.type_code, 0, 255, "type_code")
+        for i, c in enumerate(n.rgb):
+            _require_int_range(int(c), 0, 255, f"rgb[{i}]")
+        _require_int_range(n.node_flags, 0, 255, "node_flags")
+        _check_finite(n.param0, "param0")
+    _check_finite(n.resonance_freq, "resonance_freq")
+    _require_int_range(n.causal_depth, 0, 255, "causal_depth")
 
 
 def encode_frame(
@@ -103,12 +127,35 @@ def encode_frame(
     version: int = VERSION_V11,
     sequence_id: int = 1,
 ) -> bytes:
+    if version not in (VERSION_V10, VERSION_V11):
+        raise ProtocolError(f"version must be 0x10 or 0x11, got {version:#x}")
+    _require_int_range(sequence_id, 0, MAX_U16, "sequence_id")
     if len(nodes) > MAX_SE_NODES:
         raise ProtocolError("MAX_SE_NODES exceeded")
     _assert_unique_node_ids(nodes)
+
     cons = list(constraints or [])
+    if version == VERSION_V10 and (cons or extended_meta):
+        raise ProtocolError("v1.0 forbids Constraint Table and Extended Meta")
     if len(cons) > MAX_CONSTRAINTS:
         raise ProtocolError("MAX_CONSTRAINTS exceeded")
+
+    for n in nodes:
+        _validate_node_for_encode(n, embodied)
+
+    id_set = {n.node_id for n in nodes}
+    for c in cons:
+        _require_int_range(c.ctype, 0, 255, "constraint_type")
+        _check_finite(c.param0, "constraint.param0")
+        _check_finite(c.param1, "constraint.param1")
+        if c.node_a != GLOBAL_NA and c.node_a not in id_set:
+            raise ProtocolError(f"constraint node_a {c.node_a} out of SE set")
+        if c.node_b != GLOBAL_NA and c.node_b not in id_set:
+            raise ProtocolError(f"constraint node_b {c.node_b} out of SE set")
+        if c.node_a != GLOBAL_NA:
+            _require_int_range(c.node_a, 0, MAX_NODE_ID, "constraint.node_a")
+        if c.node_b != GLOBAL_NA:
+            _require_int_range(c.node_b, 0, MAX_NODE_ID, "constraint.node_b")
 
     flags = 0
     if cons:
@@ -119,31 +166,15 @@ def encode_frame(
         flags |= FLAG_HAS_EXTENDED_META
 
     body = bytearray()
-    body += struct.pack(
-        "<HBBHH",
-        MAGIC,
-        version & 0xFF,
-        flags & 0xFF,
-        len(nodes) & 0xFFFF,
-        sequence_id & 0xFFFF,
-    )
+    body += struct.pack("<HBBHH", MAGIC, version, flags, len(nodes), sequence_id)
 
     for n in nodes:
-        _check_finite(n.pos[0], "pos.x")
-        _check_finite(n.pos[1], "pos.y")
-        _check_finite(n.pos[2], "pos.z")
-        _check_finite(n.param0, "param0")
-        _check_finite(n.vel[0], "vel.x")
-        _check_finite(n.vel[1], "vel.y")
-        _check_finite(n.vel[2], "vel.z")
-        _check_finite(n.phase, "phase")
-        _check_finite(n.resonance_freq, "resonance_freq")
         if embodied:
             body += struct.pack(
                 "<HBB3f3ff",
-                n.node_id & 0xFFFF,
-                n.risk_state & 0xFF,
-                n.sub_system & 0xFF,
+                n.node_id,
+                n.risk_state,
+                n.sub_system,
                 float(n.pos[0]),
                 float(n.pos[1]),
                 float(n.pos[2]),
@@ -155,32 +186,30 @@ def encode_frame(
         else:
             body += struct.pack(
                 CORE_FMT,
-                n.node_id & 0xFFFF,
-                n.level & 0xFF,
-                n.type_code & 0xFF,
+                n.node_id,
+                n.level,
+                n.type_code,
                 float(n.pos[0]),
                 float(n.pos[1]),
                 float(n.pos[2]),
-                n.rgb[0] & 0xFF,
-                n.rgb[1] & 0xFF,
-                n.rgb[2] & 0xFF,
-                n.node_flags & 0xFF,
+                int(n.rgb[0]),
+                int(n.rgb[1]),
+                int(n.rgb[2]),
+                n.node_flags,
                 float(n.param0),
             )
         if extended_meta:
-            body += struct.pack("<fBxxx", float(n.resonance_freq), n.causal_depth & 0xFF)
+            body += struct.pack("<fBxxx", float(n.resonance_freq), n.causal_depth)
 
     if cons:
-        body += struct.pack("<H", len(cons) & 0xFFFF)
+        body += struct.pack("<H", len(cons))
         for c in cons:
-            _check_finite(c.param0, "constraint.param0")
-            _check_finite(c.param1, "constraint.param1")
             body += struct.pack(
                 "<BBHHffH",
-                c.ctype & 0xFF,
+                c.ctype,
                 0,
-                c.node_a & 0xFFFF,
-                c.node_b & 0xFFFF,
+                c.node_a,
+                c.node_b,
                 float(c.param0),
                 float(c.param1),
                 0,
@@ -211,8 +240,10 @@ def decode_frame(data: bytes) -> DecodedFrame:
     embodied = bool(flags & FLAG_IS_EMBODIED_PROFILE)
     has_meta = bool(flags & FLAG_HAS_EXTENDED_META)
     has_ct = bool(flags & FLAG_HAS_CONSTRAINT_TABLE)
-    base = EMBODIED_SIZE if embodied else CORE_SIZE
+    if ver == VERSION_V10 and (has_meta or has_ct):
+        raise ProtocolError("v1.0 frame must not set Extended Meta or Constraint Table flags")
 
+    base = EMBODIED_SIZE if embodied else CORE_SIZE
     off = 8
     nodes: List[SENode] = []
     for _ in range(count):
@@ -224,30 +255,30 @@ def decode_frame(data: bytes) -> DecodedFrame:
                 "<HBB3f3ff", data, off
             )
             off += EMBODIED_SIZE
-            _check_finite(px, "pos.x")
-            _check_finite(py, "pos.y")
-            _check_finite(pz, "pos.z")
-            _check_finite(vx, "vel.x")
-            _check_finite(vy, "vel.y")
-            _check_finite(vz, "vel.z")
-            _check_finite(phase, "phase")
+            for v, name in (
+                (px, "pos.x"),
+                (py, "pos.y"),
+                (pz, "pos.z"),
+                (vx, "vel.x"),
+                (vy, "vel.y"),
+                (vz, "vel.z"),
+                (phase, "phase"),
+            ):
+                _check_finite(v, name)
+            if nid == GLOBAL_NA:
+                raise ProtocolError("node_id must not be 0xFFFF (GLOBAL_NA reserved)")
             node = SENode(
-                nid,
-                (px, py, pz),
-                risk_state=risk,
-                sub_system=sub,
-                vel=(vx, vy, vz),
-                phase=phase,
+                nid, (px, py, pz), risk_state=risk, sub_system=sub, vel=(vx, vy, vz), phase=phase
             )
         else:
             nid, level, tcode, px, py, pz, r, g, b, nfl, p0 = struct.unpack_from(
                 CORE_FMT, data, off
             )
             off += CORE_SIZE
-            _check_finite(px, "pos.x")
-            _check_finite(py, "pos.y")
-            _check_finite(pz, "pos.z")
-            _check_finite(p0, "param0")
+            for v, name in ((px, "pos.x"), (py, "pos.y"), (pz, "pos.z"), (p0, "param0")):
+                _check_finite(v, name)
+            if nid == GLOBAL_NA:
+                raise ProtocolError("node_id must not be 0xFFFF (GLOBAL_NA reserved)")
             node = SENode(
                 nid,
                 (px, py, pz),
@@ -330,11 +361,8 @@ def demo() -> None:
     blob = encode_frame(nodes, constraints=cons)
     fr = decode_frame(blob)
     print("=== plod_spec_codec v1.1 demo ===")
-    print(
-        f"encoded {len(blob)} bytes  flags=0x{fr.flags:02x}  "
-        f"nodes={len(fr.nodes)}  constraints={len(fr.constraints)}"
-    )
-    print("decode_frame OK (CRC + uniqueness + finite checks)")
+    print(f"encoded {len(blob)} bytes  flags=0x{fr.flags:02x}  nodes={len(fr.nodes)}")
+    print("strict encode + decode OK")
 
 
 if __name__ == "__main__":
