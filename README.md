@@ -16,16 +16,17 @@
 
 ```text
 Original Data
-    → SE Extractor
+    → SE Extractor (density + curvature + node ablation ΔE)
     → P-LOD Encoder
-    → P-LOD Binary Frame
+    → P-LOD Binary Frame  (Nodes + Edges + Constraint Table)
     → P-LOD Decoder
-    → Emergence Engine (compute budget: coarse | constrained | high_fidelity)
-    → Validator (TCS = compliance · RFS = fidelity vs Ground Truth)
+    → Emergence Engine  (plod.ref.linear_spline.v1 frozen baseline)
+    → Validator  (TCS = compliance · RFS = fidelity vs Ground Truth)
 ```
 
 $$
-\mathrm{SE} = \mathrm{Nodes} + \mathrm{Edges} + \mathrm{Constraints}
+\mathrm{SE} = \mathrm{Nodes} + \mathrm{Edges} + \mathrm{Constraints},\quad
+\mathrm{causal\_depth}(i)\propto \Delta E_{\mathrm{ablation}}
 $$
 
 ---
@@ -34,9 +35,15 @@ $$
 
 ```bash
 cd examples
-python reference_emergence_engine.py --budget coarse
+
+# Ablation-based SE extraction + horizon compression
+python horizon_compression_demo.py
+
+# RFS / Chamfer / CR report (vs Ground Truth cloud)
+python eval_reconstruction_fidelity.py
+
+# Reference emergence (budgets)
 python reference_emergence_engine.py --budget constrained
-python reference_emergence_engine.py --budget high_fidelity
 
 # Golden vectors
 cd ../tests
@@ -46,14 +53,15 @@ python run_compliance_tests.py
 
 ---
 
-## Docs
+## Docs & tools
 
-| Doc | Role |
-|-----|------|
-| [SPECIFICATION.md](docs/SPECIFICATION.md) | Wire format, Constraint Table, budgets, TCS/RFS |
-| [ROADMAP_AND_APPLICATIONS.md](docs/ROADMAP_AND_APPLICATIONS.md) | Domains + Benchmarks A–D |
-| [DEFENSIVE_PUBLICATION.md](docs/DEFENSIVE_PUBLICATION.md) | Prior Art |
-| [reference_emergence_engine.py](examples/reference_emergence_engine.py) | Normative emergence (Source of Truth for TCS) |
+| Path | Role |
+|------|------|
+| [SPECIFICATION.md](docs/SPECIFICATION.md) | Wire format, Constraint Section, causal_depth semantics |
+| [ROADMAP_AND_APPLICATIONS.md](docs/ROADMAP_AND_APPLICATIONS.md) | Benchmarks A–D; ablation marked in-repo |
+| [horizon_compression_demo.py](examples/horizon_compression_demo.py) | Node ablation → causal_depth |
+| [eval_reconstruction_fidelity.py](examples/eval_reconstruction_fidelity.py) | CR, Chamfer, TCS, RFS |
+| [reference_emergence_engine.py](examples/reference_emergence_engine.py) | **plod.ref.linear_spline.v1** normative frozen baseline |
 
 ---
 
@@ -61,8 +69,9 @@ python run_compliance_tests.py
 
 | Score | Role |
 |-------|------|
-| **TCS** | Protocol compliance (topology / constraints) |
-| **RFS** | Reconstruction fidelity vs original Ground Truth |
+| **TCS** | Protocol compliance |
+| **RFS** | $1 - \mathrm{normalized\ Chamfer}$ (fidelity to GT) |
+| **CR** | Compression ratio |
 
 ---
 
