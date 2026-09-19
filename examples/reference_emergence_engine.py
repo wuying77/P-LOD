@@ -5,9 +5,16 @@ P-LOD Official Reference Emergence Engine
 Normative reference implementation for decoding SE-Frames and reconstructing
 weak-entanglement (WE) detail in a deterministic, stdlib-only manner.
 
-This file is the Source of Truth for P-LOD compliance tests:
-  any third-party decoder/emergencer that claims "P-LOD Compliant" SHOULD
-  match this engine's topological outputs within the stated TCS bounds.
+Terminology: "Strong / Weak Entanglement" are protocol-level metaphors for
+structural anchors vs reconstructible detail — not quantum entanglement.
+
+Metrics:
+  TCS (Topological Consistency Score) — PROTOCOL COMPLIANCE only
+  RFS (Reconstruction Fidelity Score) — fidelity vs Ground Truth (not computed
+      in this demo unless GT is supplied; see Spec / Roadmap benchmarks)
+
+This file is the Source of Truth for P-LOD *compliance* tests:
+  third-party emergencers claiming "P-LOD Compliant" SHOULD meet TCS bounds.
 
 Usage:
   python reference_emergence_engine.py
@@ -26,8 +33,6 @@ import zlib
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
-# ---- Spec constants ---------------------------------------------------------
-
 MAGIC = 0x504C
 VERSION_V10 = 0x10
 VERSION_V11 = 0x11
@@ -36,9 +41,8 @@ FLAG_EXTENDED_META = 1 << 4
 
 PROFILE_ID_LINEAR_SPLINE = "plod.ref.linear_spline.v1"
 DEFAULT_SEED = 0x504C4F44  # 'PLOD'
+TCS_PASS_THRESHOLD = 0.99
 
-
-# ---- Data model -------------------------------------------------------------
 
 @dataclass
 class SENode:
@@ -58,7 +62,7 @@ class EmergedPoint:
     source_a: int
     source_b: int
     t: float
-    level: int  # 2 or 3 synthetic detail
+    level: int
 
 
 @dataclass
@@ -70,10 +74,9 @@ class EmergenceResult:
     tcs: float
     se_bytes: int
     emerged_count: int
+    rfs: Optional[float] = None  # only if Ground Truth supplied
     log_lines: List[str] = field(default_factory=list)
 
-
-# ---- Pack / unpack (reference, mirrors Spec v1.0/v1.1) ----------------------
 
 def pack_se_frame(
     nodes: Sequence[SENode],
@@ -106,7 +109,6 @@ def pack_se_frame(
                 float(n.phase),
             )
         else:
-            # minimal core-like 24B: id, level=1, type=0, xyz, rgb0, flags0, param0
             body += struct.pack(
                 "<HBB3f3Bf",
                 n.node_id & 0xFFFF,
@@ -137,7 +139,6 @@ def unpack_se_frame(data: bytes) -> Tuple[List[SENode], Dict]:
     embodied = bool(flags & FLAG_EMBODIED)
     ext = bool(flags & FLAG_EXTENDED_META)
     off = 8
-    node_size = (32 if embodied else 24) + (8 if ext else 0)
     nodes: List[SENode] = []
     for _ in range(count):
         if off + (32 if embodied else 24) > len(data) - 4:
@@ -168,8 +169,6 @@ def unpack_se_frame(data: bytes) -> Tuple[List[SENode], Dict]:
     return nodes, meta
 
 
-# ---- Deterministic helpers --------------------------------------------------
-
 def _mix_seed(seed: int, a: int, b: int, k: int) -> int:
     h = hashlib.sha256()
     h.update(struct.pack("<IIII", seed & 0xFFFFFFFF, a & 0xFFFFFFFF, b & 0xFFFFFFFF, k & 0xFFFFFFFF))
@@ -177,7 +176,6 @@ def _mix_seed(seed: int, a: int, b: int, k: int) -> int:
 
 
 def _unit_jitter(seed_bits: int, scale: float) -> Tuple[float, float, float]:
-    """Small deterministic offset in [-scale, scale]^3 from seed bits."""
     x = ((seed_bits >> 0) & 0xFF) / 255.0 * 2 - 1
     y = ((seed_bits >> 8) & 0xFF) / 255.0 * 2 - 1
     z = ((seed_bits >> 16) & 0xFF) / 255.0 * 2 - 1
@@ -191,28 +189,16 @@ def lerp3(
 
 
 def chain_edges(nodes: Sequence[SENode]) -> List[Tuple[int, int]]:
-    """Reference topology: connect consecutive ids, plus nearest-neighbor for last."""
     if len(nodes) < 2:
         return []
     by_id = sorted(nodes, key=lambda n: n.node_id)
     edges = [(by_id[i].node_id, by_id[i + 1].node_id) for i in range(len(by_id) - 1)]
-    # close a soft ring for horizon-like shells
     edges.append((by_id[-1].node_id, by_id[0].node_id))
     return edges
 
 
-# ---- Core engine ------------------------------------------------------------
-
 class ReferenceEmergenceEngine:
-    """
-    Official P-LOD reference emergencer.
-
-    Profile: plod.ref.linear_spline.v1
-      - Edge set from ordered node ids (+ ring close)
-      - Level-2 points: midpoints along edges with seed-locked micro-jitter
-      - Level-3 points: quarter points (t=0.25, 0.75)
-      - Amplitude of jitter scaled by 1 / (1 + causal_depth/64) so anchors stay stiff
-    """
+    """Official P-LOD reference emergencer (profile plod.ref.linear_spline.v1)."""
 
     PROFILE_ID = PROFILE_ID_LINEAR_SPLINE
 
@@ -226,6 +212,7 @@ class ReferenceEmergenceEngine:
         *,
         level2_per_edge: int = 1,
         level3_per_edge: int = 2,
+        ground_truth_points: Optional[Sequence[Tuple[float, float, float]]] = None,
     ) -> EmergenceResult:
         log: List[str] = []
         log.append(f"[REF] profile={self.profile_id} seed={self.seed:#x}")
@@ -243,7 +230,6 @@ class ReferenceEmergenceEngine:
             stiff = 1.0 / (1.0 + depth / 64.0)
             jitter_scale = 0.02 * stiff
 
-            # Level 2: midpoint
             if level2_per_edge >= 1:
                 bits = _mix_seed(self.seed, a_id, b_id, 2)
                 j = _unit_jitter(bits, jitter_scale)
@@ -258,7 +244,6 @@ class ReferenceEmergenceEngine:
                     )
                 )
 
-            # Level 3: quarters
             if level3_per_edge >= 1:
                 for k, t in enumerate((0.25, 0.75)[:level3_per_edge]):
                     bits = _mix_seed(self.seed, a_id, b_id, 30 + k)
@@ -275,11 +260,23 @@ class ReferenceEmergenceEngine:
                     )
 
         tcs = self.topological_consistency_score(nodes, emerged)
-        log.append(f"[REF] emerged points={len(emerged)}  TCS={tcs:.6f}")
-        if tcs >= 0.99:
-            log.append("[REF] P-LOD Standard Compliance Test PASS (TCS >= 0.99)")
+        rfs: Optional[float] = None
+        if ground_truth_points is not None:
+            rfs = self.reconstruction_fidelity_score_placeholder(
+                emerged, ground_truth_points
+            )
+
+        log.append(f"[REF] emerged points={len(emerged)}")
+        log.append(
+            f"[REF] TCS = {tcs:.4f} | P-LOD Protocol Compliance Test: "
+            f"{'PASS' if tcs >= TCS_PASS_THRESHOLD else 'FAIL'} "
+            f"(Note: TCS verifies protocol compliance. "
+            f"Reconstruction Fidelity (RFS) is measured against original Ground Truth)."
+        )
+        if rfs is not None:
+            log.append(f"[REF] RFS (placeholder vs GT) = {rfs:.4f}")
         else:
-            log.append("[REF] P-LOD Standard Compliance Test FAIL (TCS < 0.99)")
+            log.append("[REF] RFS = N/A (no Ground Truth supplied in this run)")
 
         return EmergenceResult(
             nodes=list(nodes),
@@ -289,12 +286,17 @@ class ReferenceEmergenceEngine:
             tcs=tcs,
             se_bytes=0,
             emerged_count=len(emerged),
+            rfs=rfs,
             log_lines=log,
         )
 
-    def emerge_from_bytes(self, frame: bytes) -> EmergenceResult:
+    def emerge_from_bytes(
+        self,
+        frame: bytes,
+        ground_truth_points: Optional[Sequence[Tuple[float, float, float]]] = None,
+    ) -> EmergenceResult:
         nodes, meta = unpack_se_frame(frame)
-        result = self.emerge_from_nodes(nodes)
+        result = self.emerge_from_nodes(nodes, ground_truth_points=ground_truth_points)
         result.se_bytes = len(frame)
         result.log_lines.insert(
             1,
@@ -308,9 +310,9 @@ class ReferenceEmergenceEngine:
         nodes: Sequence[SENode], emerged: Sequence[EmergedPoint]
     ) -> float:
         """
-        TCS in [0, 1]: fraction of emerged points that remain inside the
-        axis-aligned bounding box of SE nodes expanded by 5% of diagonal.
-        Reference rule is intentionally simple, deterministic, and public.
+        TCS ∈ [0, 1] — PROTOCOL COMPLIANCE metric only.
+        Fraction of emerged points inside SE AABB expanded by 5% of diagonal.
+        Does NOT measure fidelity to an original dense signal (that is RFS).
         """
         if not nodes:
             return 0.0
@@ -325,7 +327,7 @@ class ReferenceEmergenceEngine:
         ) or 1.0
         pad = 0.05 * diag
         if not emerged:
-            return 1.0  # structure-only is always consistent with itself
+            return 1.0
         ok = 0
         for e in emerged:
             x, y, z = e.pos
@@ -337,8 +339,28 @@ class ReferenceEmergenceEngine:
                 ok += 1
         return ok / len(emerged)
 
+    @staticmethod
+    def reconstruction_fidelity_score_placeholder(
+        emerged: Sequence[EmergedPoint],
+        ground_truth: Sequence[Tuple[float, float, float]],
+    ) -> float:
+        """
+        Lightweight stand-in for RFS when GT is provided.
+        Full RFS (Chamfer / PSNR / SSIM / LPIPS / task rate) is defined in
+        ROADMAP Benchmark Suite — not claimed by this compliance engine.
+        Here: mean nearest-neighbor inverse distance mapped to (0,1] heuristic.
+        """
+        if not emerged or not ground_truth:
+            return 0.0
+        total = 0.0
+        for e in emerged:
+            best = min(
+                (e.pos[0] - g[0]) ** 2 + (e.pos[1] - g[1]) ** 2 + (e.pos[2] - g[2]) ** 2
+                for g in ground_truth
+            )
+            total += 1.0 / (1.0 + math.sqrt(best))
+        return total / len(emerged)
 
-# ---- Demo scaffolding -------------------------------------------------------
 
 def make_demo_nodes(n: int = 80) -> List[SENode]:
     nodes: List[SENode] = []
@@ -374,17 +396,22 @@ def main() -> None:
     result = engine.emerge_from_bytes(frame)
 
     print("=== P-LOD Official Reference Emergence Engine ===")
+    print("Note: SE/WE are information-theoretic metaphors, not quantum entanglement.")
     print(f"Profile:     {result.profile_id}")
     print(f"Seed:        {result.seed:#x}")
     print(f"SE-Frame:    {result.se_bytes} bytes ({result.se_bytes/1024:.2f} KB)")
     print(f"SE nodes:    {len(result.nodes)}")
     print(f"Emerged WE:  {result.emerged_count} points (L2/L3 spline fill)")
-    print(f"TCS:         {result.tcs:.6f}")
+    print(
+        f"TCS = {result.tcs:.4f} | P-LOD Protocol Compliance Test: "
+        f"{'PASS' if result.tcs >= TCS_PASS_THRESHOLD else 'FAIL'} "
+        f"(Note: TCS verifies protocol compliance. "
+        f"Reconstruction Fidelity (RFS) is measured against original Ground Truth)."
+    )
     print()
     for line in result.log_lines:
         print(line)
     print()
-    # sample a few emerged points for visibility
     print("Sample emerged points (first 5):")
     for e in result.emerged[:5]:
         print(
@@ -392,10 +419,8 @@ def main() -> None:
             f"pos=({e.pos[0]:+.4f},{e.pos[1]:+.4f},{e.pos[2]:+.4f})"
         )
     print()
-    if result.tcs >= 0.99:
-        print("STATUS: P-LOD Standard Compliance Test PASS")
-    else:
-        print("STATUS: P-LOD Standard Compliance Test FAIL")
+    status = "PASS" if result.tcs >= TCS_PASS_THRESHOLD else "FAIL"
+    print(f"STATUS: P-LOD Protocol Compliance Test {status}")
 
 
 if __name__ == "__main__":
