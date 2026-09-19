@@ -1,20 +1,13 @@
 #!/usr/bin/env python3
 """
 P-LOD Official Reference Emergence Engine 2.0
-=============================================
-Normative reference: SE decode + deterministic WE emergence with
-Compute-Budget tiers and optional Constraint Table checks.
+Aligned with Spec v1.1 FLAGS (Little-Endian wire).
 
-SE/WE = information-theoretic protocol metaphors (not quantum entanglement).
-
-TCS = protocol compliance | RFS = fidelity vs Ground Truth (optional)
+plod.ref.linear_spline.v1 = normative frozen baseline semantics for TCS.
+This file also supports compute budgets (v2 engineering track).
 
 Usage:
-  python reference_emergence_engine.py
-  python reference_emergence_engine.py --budget coarse
-  python reference_emergence_engine.py --budget constrained
-  python reference_emergence_engine.py --budget high_fidelity
-
+  python reference_emergence_engine.py --budget coarse|constrained|high_fidelity
 stdlib only.
 """
 
@@ -31,19 +24,21 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 MAGIC = 0x504C
 VERSION_V10, VERSION_V11 = 0x10, 0x11
-FLAG_EMBODIED = 1 << 2
-FLAG_EXTENDED_META = 1 << 4
+# Spec v1.1 FLAGS
+HAS_CONSTRAINT_TABLE = 0x01
+IS_EMBODIED_PROFILE = 0x02
+HAS_EXTENDED_META = 0x04
 
 CONSTRAINT_DISTANCE = 0x01
 CONSTRAINT_BOUNDARY = 0x02
 CONSTRAINT_TEMPORAL = 0x03
+GLOBAL_NA = 0xFFFF
 
 PROFILE_ID = "plod.ref.linear_spline.v2"
 DEFAULT_SEED = 0x504C4F44
 TCS_PASS = 0.99
-
 CORE_FMT = "<HBB3f3BBf"
-CORE_SIZE = struct.calcsize(CORE_FMT)
+CORE_SIZE = 24
 
 
 @dataclass
@@ -94,9 +89,9 @@ class EmergenceResult:
 def pack_se_frame(nodes: Sequence[SENode], *, embodied=True, extended_meta=True, seq=1) -> bytes:
     flags = 0
     if embodied:
-        flags |= FLAG_EMBODIED
+        flags |= IS_EMBODIED_PROFILE
     if extended_meta:
-        flags |= FLAG_EXTENDED_META
+        flags |= HAS_EXTENDED_META
     ver = VERSION_V11 if extended_meta else VERSION_V10
     body = bytearray()
     body += struct.pack("<HBBHH", MAGIC, ver, flags & 0xFF, len(nodes) & 0xFFFF, seq & 0xFFFF)
@@ -123,8 +118,8 @@ def unpack_se_frame(data: bytes) -> Tuple[List[SENode], Dict]:
     magic, ver, flags, count, seq = struct.unpack_from("<HBBHH", data, 0)
     if magic != MAGIC:
         raise ValueError("bad MAGIC")
-    embodied = bool(flags & FLAG_EMBODIED)
-    ext = bool(flags & FLAG_EXTENDED_META)
+    embodied = bool(flags & IS_EMBODIED_PROFILE)
+    ext = bool(flags & HAS_EXTENDED_META)
     off = 8
     nodes: List[SENode] = []
     for _ in range(count):
@@ -188,7 +183,7 @@ def default_constraints(nodes: Sequence[SENode]) -> List[Constraint]:
         cs.append(Constraint(CONSTRAINT_DISTANCE, a.node_id, b.node_id, d * 1.15))
     if by_id:
         rmax = max(math.sqrt(n.pos[0] ** 2 + n.pos[1] ** 2 + n.pos[2] ** 2) for n in by_id) + 0.05
-        cs.append(Constraint(CONSTRAINT_BOUNDARY, 0, 0, rmax))
+        cs.append(Constraint(CONSTRAINT_BOUNDARY, GLOBAL_NA, GLOBAL_NA, rmax))
         cs.append(Constraint(CONSTRAINT_TEMPORAL, by_id[0].node_id, by_id[-1].node_id, 1.0))
     return cs
 
@@ -363,26 +358,16 @@ def main() -> None:
     result = engine.emerge_from_bytes(frame)
 
     print("=== P-LOD Official Reference Emergence Engine 2.0 ===")
-    print("Structural State Representation — Progressive Realization Protocol")
+    print("Spec v1.1 FLAGS: HAS_CONSTRAINT_TABLE|IS_EMBODIED_PROFILE|HAS_EXTENDED_META")
     print("Note: SE/WE are protocol metaphors, not quantum entanglement.")
     print(f"Profile:          {result.profile_id}")
     print(f"Compute Budget:   {result.budget}")
     print(f"Elapsed:          {result.elapsed_ms:.3f} ms")
     print(f"SE-Frame:         {result.se_bytes} bytes")
-    print(f"SE nodes:         {len(result.nodes)}")
-    print(f"Constraints chk:  {result.constraints_checked}")
-    print(f"Emerged WE:       {result.emerged_count}")
-    print(
-        f"TCS = {result.tcs:.4f} | P-LOD Protocol Compliance Test: "
-        f"{'PASS' if result.tcs >= TCS_PASS else 'FAIL'} "
-        f"(Note: TCS verifies protocol compliance. "
-        f"Reconstruction Fidelity (RFS) is measured against original Ground Truth)."
-    )
+    print(f"TCS = {result.tcs:.4f} | Compliance: {'PASS' if result.tcs >= TCS_PASS else 'FAIL'}")
     print(f"RFS = {'N/A' if result.rfs is None else f'{result.rfs:.4f}'}")
-    print()
     for line in result.log_lines:
         print(line)
-    print()
     print(f"STATUS: P-LOD Protocol Compliance Test {'PASS' if result.tcs >= TCS_PASS else 'FAIL'}")
 
 
