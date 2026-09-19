@@ -2,17 +2,10 @@
 """
 P-LOD Official Reference Emergence Engine
 
-Profiles:
-  plod.ref.linear_spline.v1 — Normative frozen baseline (deterministic mid/quarter
-      linear interpolation only; NO seed, NO jitter, NO smoothstep).
-  plod.ref.linear_spline.v2 — Engineering experimental (budget, jitter, smoothstep,
-      constraint projection).
+  plod.ref.linear_spline.v1 — normative frozen baseline (Derived Edge Rule)
+  plod.ref.linear_spline.v2 — experimental budgets / jitter / constraints
 
-Decode path: examples/plod_spec_codec.decode_frame (CRC enforced).
-
-Usage:
-  python reference_emergence_engine.py --profile v1
-  python reference_emergence_engine.py --profile v2 --budget constrained
+Decode via plod_spec_codec.decode_frame only.
 """
 
 from __future__ import annotations
@@ -30,12 +23,11 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-from plod_metrics import reconstruction_fidelity_score, topological_consistency_score
+from plod_metrics import tcs_aabb
 from plod_spec_codec import (
     GLOBAL_NA,
     SENode,
     Constraint,
-    ProtocolError,
     decode_frame,
     encode_frame,
 )
@@ -44,7 +36,6 @@ PROFILE_V1 = "plod.ref.linear_spline.v1"
 PROFILE_V2 = "plod.ref.linear_spline.v2"
 TCS_PASS = 0.99
 DEFAULT_SEED = 0x504C4F44
-
 CONSTRAINT_DISTANCE = 0x01
 CONSTRAINT_BOUNDARY = 0x02
 
@@ -88,7 +79,7 @@ def default_constraints(nodes: Sequence[SENode]) -> List[Constraint]:
         d = math.dist(a.pos, b.pos)
         cs.append(Constraint(CONSTRAINT_DISTANCE, a.node_id, b.node_id, d * 1.15))
     if by_id:
-        rmax = max(math.sqrt(n.pos[0] ** 2 + n.pos[1] ** 2 + n.pos[2] ** 2) for n in by_id) + 0.05
+        rmax = max(math.sqrt(sum(x * x for x in n.pos)) for n in by_id) + 0.05
         cs.append(Constraint(CONSTRAINT_BOUNDARY, GLOBAL_NA, GLOBAL_NA, rmax))
     return cs
 
@@ -115,11 +106,9 @@ def enforce_constraints(p, a, b, constraints):
 
 
 def emerge_v1(nodes: Sequence[SENode]) -> List[Tuple[float, float, float]]:
-    """Frozen baseline: pure linear mid + quarter points; no seed/jitter/smoothstep."""
     id_map = {n.node_id: n for n in nodes}
-    edges = chain_edges(nodes)
     out: List[Tuple[float, float, float]] = []
-    for a_id, b_id in edges:
+    for a_id, b_id in chain_edges(nodes):
         if a_id not in id_map or b_id not in id_map:
             continue
         na, nb = id_map[a_id], id_map[b_id]
@@ -136,19 +125,16 @@ def emerge_v2(
     constraints: Optional[Sequence[Constraint]] = None,
 ) -> Tuple[List[Tuple[float, float, float]], int]:
     id_map = {n.node_id: n for n in nodes}
-    edges = chain_edges(nodes)
     cons = list(constraints) if constraints is not None else default_constraints(nodes)
     emerged: List[Tuple[float, float, float]] = []
     checks = 0
-
     if budget == "coarse":
         samples, use_smooth, jitter_base = [0.5], False, 0.0
     elif budget == "constrained":
         samples, use_smooth, jitter_base = [0.5], False, 0.01
     else:
         samples, use_smooth, jitter_base = [0.25, 0.5, 0.75], True, 0.02
-
-    for a_id, b_id in edges:
+    for a_id, b_id in chain_edges(nodes):
         if a_id not in id_map or b_id not in id_map:
             continue
         na, nb = id_map[a_id], id_map[b_id]
@@ -195,7 +181,6 @@ def main() -> None:
 
     nodes = make_demo_nodes(args.nodes)
     frame = encode_frame(nodes, embodied=True, extended_meta=True)
-    # Strict decode (raises ProtocolError on CRC failure)
     decoded = decode_frame(frame)
 
     t0 = time.perf_counter()
@@ -205,30 +190,26 @@ def main() -> None:
         checks = 0
     else:
         profile_id = PROFILE_V2
-        emerged, checks = emerge_v2(
-            decoded.nodes, budget=args.budget, seed=args.seed
-        )
+        emerged, checks = emerge_v2(decoded.nodes, budget=args.budget, seed=args.seed)
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
     anchors = [n.pos for n in decoded.nodes]
-    tcs = topological_consistency_score(anchors, emerged)
-    # RFS needs GT; demo has none
-    rfs_str = "N/A (no Ground Truth)"
+    tcs = tcs_aabb(anchors, emerged)
 
     print("=== P-LOD Official Reference Emergence Engine ===")
     print(f"Profile:        {profile_id}")
     if args.profile == "v2":
-        print(f"Budget:         {args.budget}")
-        print(f"Constraint chk: {checks}")
+        print(f"Budget:         {args.budget}  checks={checks}")
     print(f"Elapsed:        {elapsed_ms:.3f} ms")
-    print(f"SE-Frame:       {len(frame)} bytes (codec v1.1)")
+    print(f"SE-Frame:       {len(frame)} bytes")
     print(f"SE nodes:       {len(decoded.nodes)}")
     print(f"Emerged WE:     {len(emerged)}")
-    print(f"TCS:            {tcs:.4f}")
-    print(f"RFS:            {rfs_str}")
     status = "PASS" if tcs >= TCS_PASS else "FAIL"
+    print(
+        f"TCS-AABB: {tcs:.4f} | Status: AABB Containment {status} "
+        f"(Note: Containment Proxy Verification)."
+    )
     print(f"STATUS: P-LOD Protocol Compliance Test {status}")
-    print("Note: v1 is the normative frozen baseline; v2 is experimental.")
 
 
 if __name__ == "__main__":
