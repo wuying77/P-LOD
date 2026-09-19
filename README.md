@@ -3,77 +3,76 @@
 **Progressive Strong-Entanglement Point Array with Weak-Entanglement Emergence Encoding — A Structural State Representation and Progressive Realization Protocol.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Spec](https://img.shields.io/badge/spec-v1.0%2Fv1.1-orange.svg)](docs/SPECIFICATION.md)
+[![Spec](https://img.shields.io/badge/spec-v1.1%20RFC-orange.svg)](docs/SPECIFICATION.md)
 [![Prior Art](https://img.shields.io/badge/prior%20art-defensive%20publication-success.svg)](docs/DEFENSIVE_PUBLICATION.md)
+[![CI](https://img.shields.io/badge/CI-compliance-success.svg)](.github/workflows/ci.yml)
 
 **Status:** Prior Art Protocol Specification v1.0/v1.1 & Normative Reference Implementation. Open for global research, inter-operability testing, and benchmark verification.
 
-> **Engineering Note on Terminology:** SE / WE are **protocol-level, information-theoretic metaphors** for structural anchors vs reconstructible detail — **not** quantum entanglement.
+> **Engineering Note:** SE / WE are protocol-level information-theoretic metaphors — **not** quantum entanglement.
 
 ---
 
-## Structural pipeline
+## Single public codec (Spec v1.1)
 
-```text
-Original Data
-    → SE Extractor (density + curvature + node ablation ΔE)
-    → P-LOD Encoder
-    → P-LOD Binary Frame  (Nodes + Edges + Constraint Table)
-    → P-LOD Decoder
-    → Emergence Engine  (plod.ref.linear_spline.v1 frozen baseline)
-    → Validator  (TCS = compliance · RFS = fidelity vs Ground Truth)
-```
+**[`examples/plod_spec_codec.py`](examples/plod_spec_codec.py)** is the only pack/decode implementation that tests and engines must use.
 
-$$
-\mathrm{SE} = \mathrm{Nodes} + \mathrm{Edges} + \mathrm{Constraints},\quad
-\mathrm{causal\_depth}(i)\propto \Delta E_{\mathrm{ablation}}
-$$
+| FLAGS | Mask |
+|-------|------|
+| `HAS_CONSTRAINT_TABLE` | `0x01` |
+| `IS_EMBODIED_PROFILE` | `0x02` |
+| `HAS_EXTENDED_META` | `0x04` |
+
+- Global/N/A node marker: **`0xFFFF`**
+- CRC-32/ISO-HDLC; mismatch / trailing garbage / bad VERSION → **`ProtocolError`**
+
+---
+
+## Emergence profiles
+
+| Profile | Role |
+|---------|------|
+| **`plod.ref.linear_spline.v1`** | **Normative frozen baseline** — pure linear mid/quarter points; no seed, jitter, or smoothstep |
+| `plod.ref.linear_spline.v2` | Experimental — budgets, jitter, constraint projection |
 
 ---
 
 ## Quick start
 
 ```bash
-cd examples
+python examples/plod_spec_codec.py --demo
+python examples/reference_emergence_engine.py --profile v1
+python examples/horizon_compression_demo.py
+python examples/eval_reconstruction_fidelity.py
 
-# Ablation-based SE extraction + horizon compression
-python horizon_compression_demo.py
-
-# RFS / Chamfer / CR report (vs Ground Truth cloud)
-python eval_reconstruction_fidelity.py
-
-# Reference emergence (budgets)
-python reference_emergence_engine.py --budget constrained
-
-# Golden vectors
-cd ../tests
-python generate_vectors.py
-python run_compliance_tests.py
+python tests/generate_vectors.py
+python tests/run_compliance_tests.py
 ```
+
+Shared metrics: [`examples/plod_metrics.py`](examples/plod_metrics.py) (symmetric Chamfer → RFS; AABB TCS).
 
 ---
 
-## Docs & tools
+## Pipeline
+
+```text
+Original → SE Extractor (ablation causal_depth) → Encoder (plod_spec_codec)
+  → Binary Frame → decode_frame() → Emergence (v1/v2) → Validator (TCS / RFS)
+```
+
+$$
+\mathrm{causal\_depth}_i = \mathrm{round}\big(255 \cdot \mathrm{clamp}(\Delta E_i / \max_j \Delta E_j,\,0,\,1)\big)
+$$
+
+---
+
+## Docs
 
 | Path | Role |
 |------|------|
-| [SPECIFICATION.md](docs/SPECIFICATION.md) | Wire format, Constraint Section, causal_depth semantics |
-| [ROADMAP_AND_APPLICATIONS.md](docs/ROADMAP_AND_APPLICATIONS.md) | Benchmarks A–D; ablation marked in-repo |
-| [horizon_compression_demo.py](examples/horizon_compression_demo.py) | Node ablation → causal_depth |
-| [eval_reconstruction_fidelity.py](examples/eval_reconstruction_fidelity.py) | CR, Chamfer, TCS, RFS |
-| [reference_emergence_engine.py](examples/reference_emergence_engine.py) | **plod.ref.linear_spline.v1** normative frozen baseline |
-
----
-
-## Metrics
-
-| Score | Role |
-|-------|------|
-| **TCS** | Protocol compliance |
-| **RFS** | $1 - \mathrm{normalized\ Chamfer}$ (fidelity to GT) |
-| **CR** | Compression ratio |
-
----
+| [SPECIFICATION.md](docs/SPECIFICATION.md) | RFC-style wire format |
+| [ROADMAP_AND_APPLICATIONS.md](docs/ROADMAP_AND_APPLICATIONS.md) | Benchmarks A–D |
+| [DEFENSIVE_PUBLICATION.md](docs/DEFENSIVE_PUBLICATION.md) | Prior Art |
 
 ## Credits
 
