@@ -2,13 +2,13 @@
 """
 P-LOD Spec v1.1 public codec (stdlib only) — single source of truth for pack/decode.
 
-FLAGS (Little-Endian wire):
+FLAGS (Little-Endian):
   HAS_CONSTRAINT_TABLE = 0x01
   IS_EMBODIED_PROFILE  = 0x02
   HAS_EXTENDED_META    = 0x04
 
-CRC-32/ISO-HDLC over Header+Nodes+Constraints (excludes trailing CRC).
-Global/N/A node marker in constraints: 0xFFFF
+Rejects: bad MAGIC/VERSION, CRC mismatch, trailing garbage, duplicate node_id,
+non-finite floats (pos/vel/phase/param0/resonance_freq/constraint params).
 
 Usage:
   python plod_spec_codec.py --demo
@@ -27,9 +27,9 @@ MAGIC = 0x504C
 VERSION_V10 = 0x10
 VERSION_V11 = 0x11
 
-FLAG_HAS_CONSTRAINT_TABLE = 1 << 0  # 0x01
-FLAG_IS_EMBODIED_PROFILE = 1 << 1  # 0x02
-FLAG_HAS_EXTENDED_META = 1 << 2  # 0x04
+FLAG_HAS_CONSTRAINT_TABLE = 1 << 0
+FLAG_IS_EMBODIED_PROFILE = 1 << 1
+FLAG_HAS_EXTENDED_META = 1 << 2
 
 GLOBAL_NA = 0xFFFF
 MAX_SE_NODES = 65535
@@ -83,9 +83,15 @@ class DecodedFrame:
     raw_size: int = 0
 
 
-def _check_finite(x: float, name: str = "coord") -> None:
-    if math.isnan(x) or math.isinf(x):
-        raise ProtocolError(f"NaN/Inf in {name}")
+def _check_finite(x: float, field_name: str) -> None:
+    if isinstance(x, float) and (math.isnan(x) or math.isinf(x)):
+        raise ProtocolError(f"Invalid non-finite float detected in [{field_name}]")
+
+
+def _assert_unique_node_ids(nodes: Sequence[SENode]) -> None:
+    ids = [n.node_id for n in nodes]
+    if len(ids) != len(set(ids)):
+        raise ProtocolError("Duplicate node_id detected in SE Node Table")
 
 
 def encode_frame(
@@ -99,6 +105,7 @@ def encode_frame(
 ) -> bytes:
     if len(nodes) > MAX_SE_NODES:
         raise ProtocolError("MAX_SE_NODES exceeded")
+    _assert_unique_node_ids(nodes)
     cons = list(constraints or [])
     if len(cons) > MAX_CONSTRAINTS:
         raise ProtocolError("MAX_CONSTRAINTS exceeded")
@@ -122,8 +129,15 @@ def encode_frame(
     )
 
     for n in nodes:
-        for c in n.pos:
-            _check_finite(c)
+        _check_finite(n.pos[0], "pos.x")
+        _check_finite(n.pos[1], "pos.y")
+        _check_finite(n.pos[2], "pos.z")
+        _check_finite(n.param0, "param0")
+        _check_finite(n.vel[0], "vel.x")
+        _check_finite(n.vel[1], "vel.y")
+        _check_finite(n.vel[2], "vel.z")
+        _check_finite(n.phase, "phase")
+        _check_finite(n.resonance_freq, "resonance_freq")
         if embodied:
             body += struct.pack(
                 "<HBB3f3ff",
@@ -159,6 +173,8 @@ def encode_frame(
     if cons:
         body += struct.pack("<H", len(cons) & 0xFFFF)
         for c in cons:
+            _check_finite(c.param0, "constraint.param0")
+            _check_finite(c.param1, "constraint.param1")
             body += struct.pack(
                 "<BBHHffH",
                 c.ctype & 0xFF,
@@ -208,8 +224,13 @@ def decode_frame(data: bytes) -> DecodedFrame:
                 "<HBB3f3ff", data, off
             )
             off += EMBODIED_SIZE
-            for v, name in ((px, "x"), (py, "y"), (pz, "z")):
-                _check_finite(v, name)
+            _check_finite(px, "pos.x")
+            _check_finite(py, "pos.y")
+            _check_finite(pz, "pos.z")
+            _check_finite(vx, "vel.x")
+            _check_finite(vy, "vel.y")
+            _check_finite(vz, "vel.z")
+            _check_finite(phase, "phase")
             node = SENode(
                 nid,
                 (px, py, pz),
@@ -223,8 +244,10 @@ def decode_frame(data: bytes) -> DecodedFrame:
                 CORE_FMT, data, off
             )
             off += CORE_SIZE
-            for v, name in ((px, "x"), (py, "y"), (pz, "z")):
-                _check_finite(v, name)
+            _check_finite(px, "pos.x")
+            _check_finite(py, "pos.y")
+            _check_finite(pz, "pos.z")
+            _check_finite(p0, "param0")
             node = SENode(
                 nid,
                 (px, py, pz),
@@ -240,11 +263,14 @@ def decode_frame(data: bytes) -> DecodedFrame:
             if pad != b"\x00\x00\x00":
                 raise ProtocolError("Extended Meta pad must be zero")
             off += META_SIZE
+            _check_finite(freq, "resonance_freq")
             node.resonance_freq = freq
             node.causal_depth = depth
         nodes.append(node)
 
+    _assert_unique_node_ids(nodes)
     id_set = {n.node_id for n in nodes}
+
     constraints: List[Constraint] = []
     if has_ct:
         if off + 2 > len(data) - 4:
@@ -262,6 +288,8 @@ def decode_frame(data: bytes) -> DecodedFrame:
             off += CONSTRAINT_SIZE
             if cflags != 0 or reserved != 0:
                 raise ProtocolError("constraint reserved/cflags must be zero")
+            _check_finite(p0, "constraint.param0")
+            _check_finite(p1, "constraint.param1")
             if a != GLOBAL_NA and a not in id_set:
                 raise ProtocolError(f"constraint node_a {a} out of SE set")
             if b != GLOBAL_NA and b not in id_set:
@@ -299,18 +327,16 @@ def demo() -> None:
         Constraint(0x01, 0, 1, 2.5),
         Constraint(0x02, GLOBAL_NA, GLOBAL_NA, 1.75),
     ]
-    blob = encode_frame(nodes, constraints=cons, embodied=False, extended_meta=False)
+    blob = encode_frame(nodes, constraints=cons)
     fr = decode_frame(blob)
     print("=== plod_spec_codec v1.1 demo ===")
-    print(f"encoded {len(blob)} bytes  flags=0x{fr.flags:02x}  nodes={len(fr.nodes)}  constraints={len(fr.constraints)}")
-    print("decode_frame OK (CRC enforced)")
+    print(
+        f"encoded {len(blob)} bytes  flags=0x{fr.flags:02x}  "
+        f"nodes={len(fr.nodes)}  constraints={len(fr.constraints)}"
+    )
+    print("decode_frame OK (CRC + uniqueness + finite checks)")
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--demo", action="store_true")
-    args = ap.parse_args()
-    if args.demo:
-        demo()
-    else:
-        demo()
+    argparse.ArgumentParser().parse_args()
+    demo()

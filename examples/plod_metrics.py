@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared TCS / RFS metrics for P-LOD (stdlib only)."""
+"""Shared TCS-AABB / RFS metrics for P-LOD (stdlib only)."""
 
 from __future__ import annotations
 
@@ -26,7 +26,6 @@ def mean_nn(src: Sequence[Point], dst: Sequence[Point], sample: int = 800) -> fl
 def chamfer_distance(
     a: Sequence[Point], b: Sequence[Point], sample_a: int = 800, sample_b: int = 800
 ) -> float:
-    """Symmetric Chamfer: 0.5 * (mean_nn(A,B) + mean_nn(B,A))."""
     return 0.5 * (mean_nn(a, b, sample_a) + mean_nn(b, a, sample_b))
 
 
@@ -45,13 +44,7 @@ def bbox_diagonal(pts: Sequence[Point]) -> float:
 def reconstruction_fidelity_score(
     ground_truth: Sequence[Point], reconstructed: Sequence[Point]
 ) -> Tuple[float, float, float]:
-    """
-    Returns (RFS, CD, normalized_CD).
-
-    CD = 0.5 * (mean_nn(A,B) + mean_nn(B,A))
-    normalized_CD = min(1.0, CD / bbox_diagonal(ground_truth))
-    RFS = max(0.0, 1.0 - normalized_CD)
-    """
+    """RFS = max(0, 1 - min(1, CD / bbox_diag)); CD = symmetric Chamfer."""
     cd = chamfer_distance(ground_truth, reconstructed)
     diag = bbox_diagonal(ground_truth)
     cd_norm = min(1.0, cd / diag)
@@ -63,13 +56,15 @@ def topological_consistency_score(
     anchors: Sequence[Point], emerged: Sequence[Point], pad_frac: float = 0.05
 ) -> float:
     """
-    TCS: fraction of emerged points inside SE AABB expanded by pad_frac * diagonal.
-    Empty emerged set → 0.0 (no WE produced under a profile that expected samples).
-    No anchors → 0.0.
+    TCS-AABB (Bounding-box Containment Proxy).
+
+    Fraction of emerged points inside the SE axis-aligned bounding box expanded
+    by pad_frac * diagonal. This is a containment check — not a full graph-edit
+    or homology metric.
+
+    Empty anchors or empty emerged → 0.0
     """
-    if not anchors:
-        return 0.0
-    if not emerged:
+    if not anchors or not emerged:
         return 0.0
     xs, ys, zs = zip(*anchors)
     min_x, max_x = min(xs), max(xs)
@@ -85,3 +80,8 @@ def topological_consistency_score(
         and min_z - pad <= p[2] <= max_z + pad
     )
     return ok / len(emerged)
+
+
+# Alias for explicit naming in reports
+containment_score = topological_consistency_score
+tcs_aabb = topological_consistency_score
