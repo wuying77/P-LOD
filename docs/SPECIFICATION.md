@@ -1,149 +1,152 @@
-# P-LOD Protocol Specification v1.0 (Core Standard)
+# P-LOD Protocol Specification v1.0 / v1.1
+
+**P-LOD: Progressive Strong-Entanglement Point Array with Weak-Entanglement Emergence Encoding — A Structural State Representation and Progressive Realization Protocol.**
 
 **Status:** Prior Art Protocol Specification v1.0/v1.1 & Normative Reference Implementation. Open for global research, inter-operability testing, and benchmark verification.  
-**License:** MIT  
-**Defensive publication:** [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md)
-
-**Scope:** Byte-oriented and structural rules so independent implementations can encode, decode, and interoperate.
+**License:** MIT · [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md)
 
 > **Engineering Note on Terminology:**  
-> In the P-LOD specification, the terms *"Strong Entanglement (SE)"* and *"Weak Entanglement (WE)"* represent a **protocol-level metaphor** for non-linear dependency coupling between persistent structural anchors and reconstructible procedural details. It is an **information-theoretic abstraction** and **does not constitute a claim of quantum entanglement**.
+> *"Strong Entanglement (SE)"* and *"Weak Entanglement (WE)"* are **protocol-level metaphors** for non-linear dependency coupling between persistent structural anchors and reconstructible procedural details. They are **information-theoretic abstractions** and **do not constitute a claim of quantum entanglement**.
 
-**Codec reference:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py)  
-**Emergence reference (normative):** [`examples/reference_emergence_engine.py`](../examples/reference_emergence_engine.py)  
-**Horizon demo:** [`examples/horizon_compression_demo.py`](../examples/horizon_compression_demo.py)
+**Pipeline (structural realization):**
 
----
+```text
+Original Data → SE Extractor → P-LOD Encoder → P-LOD Binary Frame
+       → P-LOD Decoder → Emergence Engine (budgeted) → Validator (TCS / RFS)
+```
 
-## 0. Legal & Public Domain Status (Defensive Publication)
-
-This specification and its associated algorithms constitute a **Defensive Publication** under the MIT License with public version-control timestamps (Prior Art).
-
-**P-LOD is a public technical commons.** Implementers may build interoperable codecs freely. See [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md).
+**References:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) · [`examples/reference_emergence_engine.py`](../examples/reference_emergence_engine.py) · [`tests/run_compliance_tests.py`](../tests/run_compliance_tests.py)
 
 ---
 
-## 1. Goals
+## 0. Legal (Defensive Publication)
 
-1. Define a clear **container + SE payload** for multi-language decoders.
-2. Quantify why sparse skeletons can be orders of magnitude smaller than dense media.
-3. Separate Core profile vs optional Embodied profile.
-
-Illustrative sizes (e.g. ~2.51 KB) are **worked examples under stated assumptions**, not universal constants.
+Public technical commons under MIT with Prior Art timestamps. Full text: [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md).
 
 ---
 
-## 2. Frame Architecture Overview
+## 1. Structural definition of SE
 
-| Layer | Name | Role |
-|-------|------|------|
-| **SE-Frame** | Strong-Entanglement Frame | Low-entropy topological skeleton (structure / identity / mission-critical logic) |
-| **WE-Stream** | Weak-Entanglement Stream | Optional reconstructible detail |
+$$
+\mathrm{SE} = \mathrm{Nodes} + \mathrm{Edges} + \mathrm{Constraints}
+$$
 
-**Design rule:** Mission-critical decisions MUST be possible from the **SE-Frame alone**.
+| Component | Role |
+|-----------|------|
+| **Nodes** | Discrete structural anchors (positions, labels, metas) |
+| **Edges** | Topology links (explicit edge list or ordered-id chain in reference profile) |
+| **Constraints** | Hard / soft rules the WE emergencer must respect |
 
----
-
-## 3. Header (Core, 8 bytes)
-
-Little-endian.
-
-| Offset | Field | Type | Description |
-|--------|-------|------|-------------|
-| 0..1 | `MAGIC` | uint16 | `0x504C` |
-| 2 | `VERSION` | uint8 | `0x10` v1.0; `0x11` v1.1 metas |
-| 3 | `FLAGS` | uint8 | see below |
-| 4..5 | `SE_NODE_COUNT` | uint16 | |
-| 6..7 | `SEQUENCE_ID` | uint16 | |
-
-**FLAGS:** bit0 WE_PRESENT, bit1 TOPOLOGY_INLINE, bit2 EMBODIED_PROFILE, bit3 FORWARD_FOCUS, bit4 EXTENDED_META.
+WE detail is *progressive realization* under a **compute budget**, not a second stored dense volume.
 
 ---
 
-## 4–5. Core / Embodied nodes & v1.1 metas
+## 2. Frame overview
 
-- Core suggested binary node: **24 bytes**
-- Embodied node: **32 bytes** (pos, vel, phase, risk, sub_system)
-- v1.1 optional **8-byte** meta: `resonance_freq` (float32), `causal_depth` (uint8), pad×3
+| Layer | Role |
+|-------|------|
+| SE-Frame | Structural state (nodes + edges + optional constraint table) |
+| WE-Stream | Optional emergent detail |
 
-Full layouts remain as previously published in this repository.
-
----
-
-## 6. Weak-Entanglement Stream
-
-Out of band relative to structural truth. Optional CRC32 trailer allowed.
+Mission-critical decisions MUST be possible from **SE alone**.
 
 ---
 
-## 7. Worked size example (illustrative)
+## 3. Header (8 bytes)
 
-80 × 32 B + header + CRC ≈ **2.51 KB**; + v1.1 metas ≈ **~3.1 KB**.
+`MAGIC=0x504C`, `VERSION` `0x10`/`0x11`, `FLAGS`, `SE_NODE_COUNT`, `SEQUENCE_ID`.
+
+FLAGS: WE_PRESENT, TOPOLOGY_INLINE, EMBODIED_PROFILE, FORWARD_FOCUS, EXTENDED_META, …
+
+---
+
+## 4–5. Nodes (Core 24B / Embodied 32B) + v1.1 metas
+
+Core / Embodied layouts as previously specified. v1.1 meta: `resonance_freq` (f32), `causal_depth` (u8).
+
+---
+
+## 5.7 Constraint Table (v1.1 Extended Specification)
+
+Optional section after nodes (before CRC). When present, FLAG bit or profile documents `CONSTRAINT_TABLE`.
+
+**Logical record** (reference encoding; portable across languages):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ctype` | uint8 | Constraint class |
+| `node_a` | uint16 | Primary node id (0 = global) |
+| `node_b` | uint16 | Secondary node id |
+| `value` | float32 | Class-specific scalar |
+
+**Constraint classes:**
+
+| Code | Name | Semantics |
+|------|------|-----------|
+| `0x01` | **Distance Constraint** | Upper bound on topological/spatial separation between A and B |
+| `0x02` | **Boundary / Safety Constraint** | WE samples must not exit the given safety/physical envelope (e.g. max radius) |
+| `0x03` | **Temporal Link** | Causal / temporal evolution bound between time-indexed anchors |
+
+Reference Emergence Engine 2.0 applies Distance + Boundary projection under `budget=constrained|high_fidelity`.
+
+---
+
+## 6. WE stream & CRC
+
+WE optional. CRC32 trailer optional but recommended for golden vectors.
+
+---
+
+## 7. Size examples
+
+~2.51 KB class for 80×32B embodied + header + CRC; +metas ≈ 3.1 KB.
 
 ---
 
 ## 8. Progressive levels
 
-Level 1 extreme skeleton → Level 2 attributes → Level 3 local transitions.
+L1 skeleton → L2 attributes → L3 transitions.
 
 ---
 
 ## 9. Official Reference Emergence Engine (Normative)
 
-[`examples/reference_emergence_engine.py`](../examples/reference_emergence_engine.py) is the **normative reference** for SE decode + deterministic WE emergence (Source of Truth for **protocol compliance**).
+[`examples/reference_emergence_engine.py`](../examples/reference_emergence_engine.py) — **Source of Truth** for protocol compliance.
 
-Profile: `plod.ref.linear_spline.v1` · Default seed: `0x504C4F44`.
+### 9.1 Compute budgets
 
-### 9.1 Metrics: Compliance (TCS) vs Fidelity (RFS)
+| Budget | Intent | Behavior |
+|--------|--------|----------|
+| `coarse` | ~1 ms class | Midpoint linear emergence only |
+| `constrained` | ~10 ms class | Midpoints + **Constraint Table** projection |
+| `high_fidelity` | ~50 ms class | Dense samples + smoothstep + constraints + micro-jitter |
 
-| Metric | Full name | Answers | Pass rule |
-|--------|-----------|---------|-----------|
-| **TCS** | Topological Consistency Score | Does the third-party engine respect **protocol topology constraints** (e.g. emerged samples stay in the SE-bounded region defined by the reference)? | **TCS ≥ 0.99 → Protocol Compliance PASS** |
-| **RFS** | Reconstruction Fidelity Score | How close is the emerged state to **original Ground Truth**? | Domain-specific (see below); **not** substituted by TCS |
+### 9.2 Metrics
 
-**TCS is not RFS.** A system can be protocol-compliant (high TCS) while still looking different from a particular dense capture (low RFS), and vice versa.
+| Metric | Meaning | Pass |
+|--------|---------|------|
+| **TCS** | Protocol topological consistency | ≥ 0.99 |
+| **RFS** | Fidelity vs Ground Truth | Domain metrics (Roadmap Benchmarks A–D) |
 
-**Suggested RFS measures (for experimental suites, not wire format):**
-
-| Domain | Suggested RFS indicators |
-|--------|--------------------------|
-| 3D mesh / point cloud | Chamfer Distance, Hausdorff Distance |
-| Image / video | PSNR, SSIM, LPIPS |
-| Embodied / robotics | Task-completion / mission-success rate from SE-only control |
-
-Reference engine log format (compliance runs without GT):
-
-```text
-TCS = 1.0000 | P-LOD Protocol Compliance Test: PASS
-(Note: TCS verifies protocol compliance. Reconstruction Fidelity (RFS) is measured against original Ground Truth).
-```
-
-### 9.2 Third-party “P-LOD Compliant”
-
-SHALL parse SE correctly; meet TCS ≥ 0.99 under the reference definition (or publish an alternate open profile); MUST NOT require WE for SE-only safety decisions.
+TCS ≠ RFS.
 
 ---
 
-## 10. Compliance checklist
+## 10. Golden vectors
 
-Core decode rules + Section 9 for emergence claims.
+`tests/generate_vectors.py` · `tests/run_compliance_tests.py` · `tests/vectors/*.plod`
 
----
-
-## 11. Versioning
-
-v1.0 wire · v1.1 additive metas · reference profile ids version independently.
-
----
-
-## 12. References
-
-| Resource | Path |
-|----------|------|
-| README | [../README.md](../README.md) |
-| Roadmap + Benchmark Suite | [ROADMAP_AND_APPLICATIONS.md](ROADMAP_AND_APPLICATIONS.md) |
-| Reference engine | [`../examples/reference_emergence_engine.py`](../examples/reference_emergence_engine.py) |
+- `minimal_valid.plod` — valid core SE  
+- `embodied_32b.plod` — embodied + metas  
+- `invalid_crc.plod` — CRC failure path  
+- `unknown_extension.plod` — unknown flag forward-compat  
 
 ---
 
-*P-LOD Spec v1.0/v1.1 — Prior Art under MIT. TCS = compliance; RFS = fidelity to Ground Truth.*
+## 11–12. Compliance & versioning
+
+v1.0 wire · v1.1 metas + Constraint Table semantics · Reference profile `plod.ref.linear_spline.v2`
+
+---
+
+*Structural State Representation and Progressive Realization Protocol — Prior Art under MIT.*
