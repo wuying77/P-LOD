@@ -13,9 +13,10 @@
 
 ---
 
-## Single public codec
+## Single public codec (Source of Truth)
 
-**[`examples/plod_spec_codec.py`](examples/plod_spec_codec.py)** is the **only** encode/decode path (`encode_frame` / `decode_frame`). Golden vectors, tests, and the reference engine all call this module — no parallel pack/unpack implementations.
+**[`examples/plod_spec_codec.py`](examples/plod_spec_codec.py)** — sole `encode_frame` / `decode_frame`.  
+Golden vectors, tests, and the reference engine call **only** this module. No parallel binary packers.
 
 | FLAGS | Mask |
 |-------|------|
@@ -27,10 +28,10 @@
 
 ## Emergence profiles
 
-| CLI | Profile | Role |
-|-----|---------|------|
-| `--profile v1` (default) | `plod.ref.linear_spline.v1` | Normative frozen baseline |
-| `--profile v2` | `plod.ref.linear_spline.v2` | Experimental budgets / jitter |
+| CLI | Profile |
+|-----|--------|
+| `--profile v1` **(default)** | `plod.ref.linear_spline.v1` normative frozen baseline |
+| `--profile v2` | experimental budgets / jitter / Distance+Boundary |
 
 ---
 
@@ -48,13 +49,40 @@ python tests/run_compliance_tests.py
 python examples/test_plod_spec_codec.py
 ```
 
+**TCS-AABB** is a containment **proxy**; full compliance also needs edge validity, constraint compliance, and sample coverage (see Spec §8).
+
+---
+
+## Architecture (current → package roadmap)
+
+**Today (reference tree):**
+
+```text
+examples/plod_spec_codec.py   # codec (SoT)
+examples/plod_metrics.py      # TCS-AABB / RFS
+examples/reference_emergence_engine.py
+tests/                        # golden vectors + CI
+docs/SPECIFICATION.md
+```
+
+**Future package layout (non-breaking target):**
+
+```text
+src/plod/
+  codec.py      # from plod_spec_codec
+  metrics.py    # from plod_metrics
+  profiles.py   # v1 / v2 emergence
+```
+
+Migration will re-export the same APIs so existing imports remain stable.
+
 ---
 
 ## Docs
 
 | Path | Role |
 |------|------|
-| [SPECIFICATION.md](docs/SPECIFICATION.md) | Wire format, version matrix, constraint semantics |
+| [SPECIFICATION.md](docs/SPECIFICATION.md) | Wire format, version matrix, constraints, future TLV |
 | [ROADMAP_AND_APPLICATIONS.md](docs/ROADMAP_AND_APPLICATIONS.md) | Benchmarks |
 | [DEFENSIVE_PUBLICATION.md](docs/DEFENSIVE_PUBLICATION.md) | Prior Art |
 

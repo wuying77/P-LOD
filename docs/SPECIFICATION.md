@@ -12,7 +12,8 @@ $$
 \mathrm{SE} = \mathrm{Nodes} + \mathrm{Edges} + \mathrm{Constraints}
 $$
 
-**Sole public codec:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) (`encode_frame` / `decode_frame`).
+**Sole public codec:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) (`encode_frame` / `decode_frame`).  
+Encoders **MUST NOT** silently truncate integer fields; out-of-range values raise `ProtocolError`.
 
 ---
 
@@ -111,16 +112,16 @@ No Edge Table on the wire. For **`plod.ref.linear_spline.v1`**: sort by `node_id
 | 10–13 | 4 | `param1` float32 |
 | 14–15 | 2 | reserved (0) |
 
-### Constraint Semantics
+### Constraint type codes & `param0` / `param1` meanings
 
-| Type | Code | `plod.ref.linear_spline.v1` | Notes |
-|------|------|------------------------------|--------|
-| **Distance** | `0x01` | **Enforced** when profile applies constraints (v2 constrained/high_fidelity budgets; optional on wire for v1 storage) | Max separation A–B via `param0` |
-| **Boundary / Safety** | `0x02` | **Enforced** under the same rule | Envelope / max radius `param0` |
-| **Temporal Link** | `0x03` | **Pass-through (ignored)** by v1 baseline engine | Reserved for advanced temporal profiles |
-| **Symmetry** | `0x04` | **Pass-through (ignored)** by v1 baseline engine | Reserved for symmetry-aware profiles |
+| Type | Code | `param0` | `param1` | Profile handling |
+|------|------|----------|----------|------------------|
+| **Distance** | `0x01` | Max allowed distance between `node_a` and `node_b` | Reserved (write 0; ignore on read in v1/v2 ref) | **v2** constrained/high_fidelity: **enforced**; **v1** baseline: stored, geometry not projected |
+| **Boundary / Safety** | `0x02` | Max radius (or half-extent) of allowed envelope; often `node_a=node_b=0xFFFF` (global) | Reserved (0) | **v2** constrained/high_fidelity: **enforced**; **v1**: stored |
+| **Temporal Link** | `0x03` | Max Δt / causal lag bound (profile-defined units) | Optional secondary time weight | **v1 & v2 ref: pass-through (ignored)** |
+| **Symmetry** | `0x04` | Symmetry plane / axis parameter (profile-defined) | Optional secondary axis param | **v1 & v2 ref: pass-through (ignored)** |
 
-Decoders **MUST** still parse and retain unknown/pass-through constraint rows when present (for forward compatibility). The **v1 normative emergencer** does not alter geometry based on types `0x03`/`0x04`.
+Decoders **MUST** parse and retain all constraint rows. Unknown types: skip geometrically, keep bytes for forward compatibility.
 
 ---
 
@@ -132,34 +133,56 @@ Coverage: Header + Nodes + Constraints; excludes trailing CRC. LE uint32.
 
 ## 8. Metrics
 
-**TCS-AABB** = bounding-box containment proxy.  
-**RFS** = `1 - min(1, CD/bbox_diag)` (symmetric Chamfer).
+| Name | Role |
+|------|------|
+| **TCS-AABB** | **Containment proxy only** — emerged samples inside expanded SE AABB |
+| **RFS** | `1 - min(1, CD/bbox_diag)` with symmetric Chamfer CD |
+
+**Full protocol compliance** (beyond the reference TCS-AABB gate) is the conjunction of:
+
+1. **Edge validity** — samples lie on Derived Edge Rule segments (or profile-defined edges);
+2. **Constraint compliance** — Distance / Boundary (and future enforced types) satisfied when the active profile requires them;
+3. **Sample coverage** — required `t` set present (v1: `{0.25, 0.50, 0.75}` per edge).
 
 ```text
 TCS-AABB: 1.0000 | Status: AABB Containment PASS (Note: Containment Proxy Verification).
 ```
 
+Passing TCS-AABB alone does **not** claim complete graph-topology or constraint-set proof.
+
 ---
 
 ## 9. Security
 
-Unique `node_id`; finite floats; no silent truncation; reject unknown VERSION, bad CRC, trailing garbage.
+- Unique `node_id` ∈ `0..65534`
+- All floats finite
+- No silent integer truncation on encode
+- Reject unknown VERSION, bad CRC, trailing garbage, truncated tables
 
 ---
 
-## 10. Profiles
+## 10. Profiles & CLI
 
 | Profile | Role |
 |---------|------|
 | **`plod.ref.linear_spline.v1`** | Normative frozen baseline |
-| `plod.ref.linear_spline.v2` | Experimental (budgets / jitter / Distance+Boundary projection) |
-
-CLI:
+| `plod.ref.linear_spline.v2` | Experimental budgets / jitter / Distance+Boundary projection |
 
 ```bash
 python examples/reference_emergence_engine.py --profile v1
 python examples/reference_emergence_engine.py --profile v2 --budget constrained
 ```
+
+---
+
+## 11. Future Extension Strategy (v1.2 / v2.0+)
+
+To preserve forward compatibility without breaking v1.1 decoders:
+
+1. **Reserved FLAGS bits 3–7** remain available for feature discovery.
+2. Future optional payloads **SHOULD** use **TLV sections** after the Constraint Table (or a length-prefixed **Payload Section**): `type:u16 | length:u32 | value[length]`, unknown types skipped by length.
+3. New constraint type codes **≥ 0x10** are reserved for registration; v1.1 engines pass them through.
+4. `VERSION` bumps (`0x12`, …) only when on-wire layouts become incompatible with the matrices above.
 
 ---
 
