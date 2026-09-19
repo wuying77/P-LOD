@@ -3,138 +3,112 @@
 **Status:** Companion to [SPECIFICATION.md](SPECIFICATION.md) v1.0 / v1.1  
 **License:** MIT · Prior art — see [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md)
 
+> **Engineering Note on Terminology:** SE / WE are protocol-level, information-theoretic metaphors for structural anchors vs reconstructible detail — **not** quantum entanglement.
+
 ---
 
 ## 1. Universal Architectural Principle
 
 > **"Store Skeleton, Compute Details"** — trading local compute for network bandwidth and persistent storage.
 
-P-LOD transitions spatial computing and data transmission from **brute-force state storage** to **deterministic (or bounded) topological emergence**.
+| Layer | Role |
+|-------|------|
+| **SE-Frame** | Low-entropy identity, topology, constraints |
+| **WE-Stream** | Optional high-entropy detail |
 
-| Layer | Role | Typical cost |
-|-------|------|----------------|
-| **SE-Frame** | Low-entropy identity, topology, constraints | Tiny, must travel / persist |
-| **WE-Stream** | High-entropy appearance, prose fill, texture, in-between frames | Optional; generated or fetched locally |
+### 1.1 Official Reference Emergence Engine — Compliance Benchmark Base
 
-**Compute-for-Bandwidth:** once the skeleton is correct, edge devices spend FLOPs to reconstruct detail instead of shipping every pixel, token, or mesh vertex.
-
-### 1.1 Official Reference Emergence Engine — Benchmark Base
-
-The repository ships an **official, stdlib-only Reference Emergence Engine**:
-
-[`examples/reference_emergence_engine.py`](../examples/reference_emergence_engine.py)
-
-Per [SPECIFICATION.md §9](SPECIFICATION.md), this implementation is the **normative Source of Truth** for compliance tests:
-
-- Transparent algorithms (linear-spline profile `plod.ref.linear_spline.v1`)
-- Public Topological Consistency Score (TCS) definition
-- Third-party stacks (including large-vendor GPU paths) may accelerate freely, but claims of **"P-LOD Compliant"** emergence are measured against this baseline (or an openly documented alternate profile)
-
-This is how P-LOD retains **interpretive authority** as a global open standard without locking implementers into a single hardware vendor.
+[`examples/reference_emergence_engine.py`](../examples/reference_emergence_engine.py) is the **normative Source of Truth for protocol compliance (TCS)**.  
+**RFS** (reconstruction fidelity vs Ground Truth) is evaluated in experimental suites below — never conflated with TCS.
 
 ---
 
 ## 2. Multi-Domain Application Blueprints
 
-### A. LLM & Knowledge Graph Compression (Structured Long-Context Memory)
+### A. LLM & Knowledge Graph Compression
+SE semantic graphs; WE text emergence on query.
 
-**Bottleneck.** Massive context windows drive token cost explosion, latency, and memory degradation over long sessions.
+### B. Metaverse / Spatial Computing
+SE joints & constraints (~KB-class frames); client-side mesh/texture emergence.
 
-**P-LOD paradigm.**
+### C. Generative Video / Streaming
+SE motion & topology anchors; edge generative interpolation (roadmap targets, not guaranteed bitrates).
 
-| Layer | Role |
-|-------|------|
-| **SE-Frame** | Causal / narrative / semantic topological graph: entities, relations, chapter anchors, claim nodes (KB-scale low-entropy skeleton) |
-| **WE-Stream emergence** | Local or on-device lightweight generators reconstruct styled prose and secondary detail from `Seed_Code`, node `params`, and query context |
-
-**Outcome intent.** Persist structure once; expand language on demand. Level 1 stays semantic; higher levels lock more original phrasing when fidelity to wording is required.
-
----
-
-### B. Metaverse, Spatial Computing & Real-Time Rendering (3D / VR / AR)
-
-**Bottleneck.** Streaming high-poly meshes and materials across multi-user sessions pressures bandwidth and GPU VRAM.
-
-**P-LOD paradigm.**
-
-| Layer | Role |
-|-------|------|
-| **SE-Frame** | Core joints / control points, topology, physics boundary constraints (illustrative sparse frame ~2.5 KB class under Spec §7 assumptions) |
-| **WE-Stream emergence** | Client shaders and physics reconstruct smooth surfaces and high-entropy textures according to a **hardware capability profile** |
-
-**Outcome intent.** Synchronize skeletons; let each client emerge detail at the quality its device can afford.
+### D. Embodied AI
+Embodied profile: risk state, phase, 90/10 compute policy; **mission-critical from SE alone**.
 
 ---
 
-### C. Generative Video & Next-Gen Streaming Media
+## 3. Core Engineering Challenges (v1.1 ~ v2.0)
 
-**Bottleneck.** H.265 / AV1 remain pixel-domain compressors; 4K/8K still hit entropy and CDN cost walls.
+### ① Automatic SE Extraction — **v2.0 core objective**
 
-**P-LOD paradigm.**
-
-| Layer | Role |
-|-------|------|
-| **SE-Frame** | Sparse spatial trajectory anchors, motion curves, scene-cut graph, facial / body topology invariants, lighting state nodes |
-| **WE-Stream emergence** | Edge models perform generative interpolation and texture emergence |
-
-**Outcome intent.** Conceptual target: large reduction in raw stream payload versus pure pixel codecs when emergence quality is acceptable. Numbers are **roadmap targets**, not guaranteed bitrates.
-
----
-
-### D. Embodied AI & Autonomy (profile already in Spec v1.0)
-
-Covered by the optional **Embodied profile**: risk state machine, sub-system tags, phase angle, forward/peripheral compute policy. This roadmap treats that profile as the first vertical specialization of the same SE/WE split.
-
----
-
-## 3. Core Engineering Challenges & Roadmap (v1.1 ~ v2.0)
-
-To bridge disclosure and universal deployment, work concentrates on three pillars.
-
-### ① Automated SE-Node Saliency Extractor (The Extraction Problem)
+**Primary v2.0 milestone:** algorithms that extract a **minimal sufficient skeleton** from raw media (point clouds, meshes, images, video, text graphs) without manual annotation.
 
 | Item | Content |
 |------|--------|
-| **Objective** | Pipelines that score topological necessity |
-| **Target** | Replace manual node placement for arbitrary media |
-| **Milestone sense** | v1.1 prototypes → v2.0 reference extractors |
+| **Objective** | Score topological necessity; output SE-Frames automatically |
+| **Target** | Reference extractors with published metrics on Benchmark A–D |
 
-### ② Deterministic Emergence Profiling (Cross-Platform Consistency)
+### ② Deterministic Emergence Profiling (EDL)
+Profile registry beyond `plod.ref.linear_spline.v1`; conformance tied to reference engine TCS gates.
 
-| Item | Content |
-|------|--------|
-| **Objective** | **Emergence Description Language (EDL)** / profile registry, expanding from `plod.ref.linear_spline.v1` |
-| **Target** | Same `Profile_ID` + `Seed_Code` → bit-identical or statistically bounded reconstructions across vendors |
-| **Milestone sense** | Conformance suites keyed to the **official reference engine** |
-
-### ③ Error Accumulation & Drift Correction (Anchor Verification)
-
-| Item | Content |
-|------|--------|
-| **Objective** | Low-frequency **Correction Anchors** in long SE-Streams |
-| **Target** | Bound perceptual drift under iterative WE generation |
-
-### Supporting work items
-
-- JSON ↔ binary bridges
-- Structure-preserving quality metrics
-- GPU / shader packs that still pass reference TCS gates
+### ③ Drift Correction Anchors
+Low-frequency anchors in long SE-Streams to bound perceptual drift.
 
 ---
 
-## 4. Cosmological & Cybernetic Perspective (optional appendix)
+## 4. Benchmark Suite & Experimental Validation Roadmap
 
-From a *Motherfield Cosmology* reading, P-LOD mirrors a processing law: **do not store every micro-detail in bulk memory; store conservation-scale structure (SE-Frame) and compute local appearance upon observation or query (WE-Emergence).**
+**Principle:** Separate **protocol compliance (TCS)** from **reconstruction fidelity (RFS)**.
 
-Interpretive only. Normative behavior: [SPECIFICATION.md](SPECIFICATION.md).
+| Score | Role |
+|-------|------|
+| **TCS** | Does the implementation obey P-LOD topology rules? (reference engine) |
+| **RFS** | How close is emergence to original Ground Truth / task success? |
+
+### Benchmark A — 3D Geometry & Spatial Computing
+
+- **Setup:** Original 3D mesh / dense cloud vs SE skeleton + emerged surface samples  
+- **RFS metrics:** Chamfer Distance, Hausdorff Distance  
+- **Compliance:** TCS ≥ 0.99 on reference definition  
+
+### Benchmark B — Perceptual & Generative Media
+
+- **Setup:** Image (and still frames) reconstructed from spatial SE anchors  
+- **RFS metrics:** PSNR, SSIM, LPIPS  
+- **Note:** High TCS does not imply high PSNR; report both  
+
+### Benchmark C — Temporal & Video Streaming
+
+- **Setup:** Time-series SE trajectories + generative / interpolative WE  
+- **RFS / systems metrics:** motion continuity scores, reconstruction latency, bitrate vs baseline codecs  
+- **Roadmap targets only** until published datasets land  
+
+### Benchmark D — Embodied Robotics State
+
+- **Setup:** Agent receives **SE-Frames only** for safety / risk tasks  
+- **RFS / task metric:** Mission-critical task-completion rate (and false-negative rate on CRITICAL risk nodes)  
+- **Requirement:** Decisions must remain valid without WE  
+
+### Validation policy
+
+1. Ship open test vectors when each benchmark matures.  
+2. Third-party “Compliant” claims → TCS (or alternate open profile).  
+3. Marketing claims on “looks like original” → RFS on A–C, not TCS alone.  
 
 ---
 
-## 5. Document control
+## 5. Cosmological & Cybernetic Perspective (optional)
+
+Interpretive Motherfield / holographic metaphors only. Normative behavior: [SPECIFICATION.md](SPECIFICATION.md).
+
+---
+
+## 6. Document control
 
 | Version | Notes |
 |---------|--------|
-| v1.0+ | Applications & roadmap companion |
-| +ref-engine | Official Reference Emergence Engine as benchmark base (Spec §9) |
-
-Contributions that advance extractors, EDL profiles, or drift anchors should open issues/PRs against this roadmap and the Spec.
+| v1.0+ | Applications & roadmap |
+| +ref-engine | TCS compliance baseline |
+| +bench-suite | Benchmarks A–D; RFS defined; Auto-SE = v2.0 core |
