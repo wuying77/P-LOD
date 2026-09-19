@@ -34,7 +34,6 @@ VERSION_V10, VERSION_V11 = 0x10, 0x11
 FLAG_EMBODIED = 1 << 2
 FLAG_EXTENDED_META = 1 << 4
 
-# Constraint type codes (Spec Constraint Table)
 CONSTRAINT_DISTANCE = 0x01
 CONSTRAINT_BOUNDARY = 0x02
 CONSTRAINT_TEMPORAL = 0x03
@@ -64,7 +63,7 @@ class Constraint:
     ctype: int
     a: int
     b: int
-    value: float  # max distance, boundary radius, or max dt
+    value: float
 
 
 @dataclass
@@ -154,10 +153,6 @@ def _mix(seed: int, a: int, b: int, k: int) -> int:
     return int.from_bytes(h.digest()[:4], "little")
 
 
-def _jitter(bits: int, scale: float) -> Tuple[float, float, float]:
-    return tuple(((bits >> (8 * i)) & 0xFF) / 255.0 * 2 - 1) * scale for i in range(3))  # type error
-
-
 def _jitter3(bits: int, scale: float) -> Tuple[float, float, float]:
     return (
         (((bits >> 0) & 0xFF) / 255.0 * 2 - 1) * scale,
@@ -185,7 +180,6 @@ def chain_edges(nodes: Sequence[SENode]) -> List[Tuple[int, int]]:
 
 
 def default_constraints(nodes: Sequence[SENode]) -> List[Constraint]:
-    """Synthetic constraint table for demo: ring distances + outer boundary."""
     cs: List[Constraint] = []
     by_id = sorted(nodes, key=lambda n: n.node_id)
     for i in range(len(by_id) - 1):
@@ -199,22 +193,14 @@ def default_constraints(nodes: Sequence[SENode]) -> List[Constraint]:
     return cs
 
 
-def enforce_constraints(
-    p: Tuple[float, float, float],
-    a: SENode,
-    b: SENode,
-    constraints: Sequence[Constraint],
-) -> Tuple[Tuple[float, float, float], int]:
-    """Project point to satisfy distance/boundary caps. Returns (pos, checks)."""
+def enforce_constraints(p, a, b, constraints):
     checks = 0
     x, y, z = p
     for c in constraints:
         if c.ctype == CONSTRAINT_DISTANCE and {c.a, c.b} == {a.node_id, b.node_id}:
             checks += 1
-            # keep segment parameter; clamp radial stretch from midpoint if over
             mid = lerp3(a.pos, b.pos, 0.5)
             if math.dist(p, mid) > c.value * 0.5:
-                # pull toward midpoint
                 scale = (c.value * 0.5) / (math.dist(p, mid) or 1e-9)
                 x = mid[0] + (x - mid[0]) * scale
                 y = mid[1] + (y - mid[1]) * scale
@@ -250,22 +236,12 @@ class ReferenceEmergenceEngine:
         emerged: List[EmergedPoint] = []
         checks_total = 0
 
-        # Budget → sampling density & smoothing
         if self.budget == "coarse":
-            samples = [0.5]  # midpoint only
-            levels = [2]
-            use_smooth = False
-            jitter_base = 0.0
+            samples, levels, use_smooth, jitter_base = [0.5], [2], False, 0.0
         elif self.budget == "constrained":
-            samples = [0.5]
-            levels = [2]
-            use_smooth = False
-            jitter_base = 0.01
-        else:  # high_fidelity
-            samples = [0.25, 0.5, 0.75]
-            levels = [3, 2, 3]
-            use_smooth = True
-            jitter_base = 0.02
+            samples, levels, use_smooth, jitter_base = [0.5], [2], False, 0.01
+        else:
+            samples, levels, use_smooth, jitter_base = [0.25, 0.5, 0.75], [3, 2, 3], True, 0.02
 
         for a_id, b_id in edges:
             if a_id not in id_map or b_id not in id_map:
@@ -300,10 +276,7 @@ class ReferenceEmergenceEngine:
             f"(Note: TCS verifies protocol compliance. "
             f"Reconstruction Fidelity (RFS) is measured against original Ground Truth)."
         )
-        if rfs is not None:
-            log.append(f"[REF] RFS = {rfs:.4f}")
-        else:
-            log.append("[REF] RFS = N/A (no Ground Truth supplied)")
+        log.append(f"[REF] RFS = {rfs:.4f}" if rfs is not None else "[REF] RFS = N/A (no Ground Truth supplied)")
 
         return EmergenceResult(
             nodes=list(nodes),
@@ -354,9 +327,7 @@ def rfs_placeholder(emerged, gt) -> float:
         return 0.0
     s = 0.0
     for e in emerged:
-        best = min(
-            (e.pos[0] - g[0]) ** 2 + (e.pos[1] - g[1]) ** 2 + (e.pos[2] - g[2]) ** 2 for g in gt
-        )
+        best = min((e.pos[0] - g[0]) ** 2 + (e.pos[1] - g[1]) ** 2 + (e.pos[2] - g[2]) ** 2 for g in gt)
         s += 1.0 / (1.0 + math.sqrt(best))
     return s / len(emerged)
 
@@ -383,12 +354,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--nodes", type=int, default=80)
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
-    ap.add_argument(
-        "--budget",
-        choices=("coarse", "constrained", "high_fidelity"),
-        default="constrained",
-        help="coarse≈1ms midpoints | constrained≈constraint checks | high_fidelity≈smooth dense",
-    )
+    ap.add_argument("--budget", choices=("coarse", "constrained", "high_fidelity"), default="constrained")
     args = ap.parse_args()
 
     nodes = make_demo_nodes(args.nodes)
