@@ -2,11 +2,10 @@
 """
 P-LOD Horizon Compression Demo — Ablation-based SE extraction (stdlib only)
 
-Extracts a sparse SE skeleton from a dense high-entropy volume using:
-  Score(p) = w1*Density + w2*Curvature + w3*AblationLoss
+Score(p) = w1*Density + w2*Curvature + w3*AblationLoss
+causal_depth(i) ∝ Δ Reconstruction Error when node i is removed.
 
-causal_depth(i) ∝ Δ Reconstruction Error when node i is removed
-  (Node Ablation & Structural Loss).
+Wire FLAGS (Spec v1.1): IS_EMBODIED_PROFILE=0x02, HAS_EXTENDED_META=0x04
 
 Usage:
   python horizon_compression_demo.py
@@ -21,8 +20,8 @@ import zlib
 from typing import List, Sequence, Tuple
 
 MAGIC = 0x504C
-FLAG_EMBODIED = 1 << 2
-FLAG_EXTENDED_META = 1 << 4
+IS_EMBODIED_PROFILE = 0x02
+HAS_EXTENDED_META = 0x04
 
 Point = Tuple[float, float, float]
 
@@ -67,7 +66,6 @@ def cell_centroid(bucket: Sequence[Point]) -> Point:
 
 
 def local_curvature_proxy(centroid: Point, bucket: Sequence[Point]) -> float:
-    """Variance of directions from centroid — higher ≈ more structured bend."""
     if len(bucket) < 3:
         return 0.0
     dirs = []
@@ -83,7 +81,6 @@ def local_curvature_proxy(centroid: Point, bucket: Sequence[Point]) -> float:
 
 
 def nn_recon_error(anchors: Sequence[Point], cloud: Sequence[Point], sample: int = 400) -> float:
-    """Mean distance from sampled cloud points to nearest anchor (proxy recon error)."""
     if not anchors:
         return 1e9
     step = max(1, len(cloud) // sample)
@@ -100,7 +97,6 @@ def nn_recon_error(anchors: Sequence[Point], cloud: Sequence[Point], sample: int
 def ablation_delta(
     candidates: List[Point], cloud: Sequence[Point], idx: int, base_err: float
 ) -> float:
-    """ΔE when removing candidate idx from the anchor set."""
     reduced = [c for i, c in enumerate(candidates) if i != idx]
     err = nn_recon_error(reduced, cloud, sample=300)
     return max(0.0, err - base_err)
@@ -115,12 +111,7 @@ def extract_se_ablation(
     w_curvature: float = 0.25,
     w_ablation: float = 0.50,
 ) -> List[dict]:
-    """
-    Score(p) = w1*Density + w2*Curvature + w3*AblationLoss
-    causal_depth ∝ normalized ablation ΔE (mapped to 0..255).
-    """
     cells = density_map(pts, grid)
-    # candidate centroids from occupied cells
     cands: List[dict] = []
     dens_max = max(len(b) for b in cells.values()) or 1
     for key, bucket in cells.items():
@@ -129,7 +120,6 @@ def extract_se_ablation(
         curv = local_curvature_proxy(c, bucket)
         cands.append({"pos": c, "density": dens, "curvature": curv, "bucket_n": len(bucket)})
 
-    # pre-filter top-K by density+curvature to keep ablation tractable
     for c in cands:
         c["pre"] = 0.5 * c["density"] + 0.5 * min(1.0, c["curvature"] * 2.0)
     cands.sort(key=lambda x: x["pre"], reverse=True)
@@ -160,19 +150,16 @@ def extract_se_ablation(
             + w_curvature * min(1.0, c["curvature"] * 2.0)
             + w_ablation * ab_n
         )
-        # causal_depth: map ablation importance to 0..255; anchors >=200 if top tier
         c["causal_depth"] = int(min(255, round(ab_n * 255)))
 
     pool.sort(key=lambda x: x["score"], reverse=True)
     selected = pool[:max_nodes]
 
-    # re-scale depths so top ablation nodes sit as Causal Anchors (>=200)
     if selected:
         top_ab = max(c["ablation"] for c in selected) or 1.0
         for c in selected:
             ab_n = c["ablation"] / top_ab
-            depth = int(min(255, 80 + round(ab_n * 175)))
-            c["causal_depth"] = depth
+            c["causal_depth"] = int(min(255, 80 + round(ab_n * 175)))
 
     print(f"Selected SE nodes: {len(selected)}")
     print(
@@ -207,7 +194,7 @@ def extract_se_ablation(
 
 
 def pack_embodied(nodes: List[dict]) -> bytes:
-    flags = FLAG_EMBODIED | FLAG_EXTENDED_META
+    flags = IS_EMBODIED_PROFILE | HAS_EXTENDED_META
     body = bytearray()
     body += struct.pack("<HBBHH", MAGIC, 0x11, flags, len(nodes) & 0xFFFF, 1)
     for n in nodes:
