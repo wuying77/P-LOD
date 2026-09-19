@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""
-P-LOD golden-vector compliance tests (stdlib only).
-
-Usage (from repo root):
-  python tests/generate_vectors.py
-  python tests/run_compliance_tests.py
-"""
+"""P-LOD golden-vector compliance tests (stdlib only)."""
 from __future__ import annotations
 
 import struct
@@ -13,12 +7,12 @@ import sys
 import zlib
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
 VEC = Path(__file__).resolve().parent / "vectors"
-
 MAGIC = 0x504C
 FLAG_EMBODIED = 1 << 2
 FLAG_EXTENDED_META = 1 << 4
+CORE_FMT = "<HBB3f3BBf"
+CORE_SIZE = struct.calcsize(CORE_FMT)
 
 
 def parse_frame(data: bytes):
@@ -41,12 +35,12 @@ def parse_frame(data: bytes):
             off += 32
             node = {"id": nid, "pos": (px, py, pz)}
         else:
-            if off + 24 > len(data) - 4:
+            if off + CORE_SIZE > len(data) - 4:
                 raise ValueError("truncated core")
             nid, level, tcode, px, py, pz, r, g, b, nfl, p0 = struct.unpack_from(
-                "<HBB3f3Bf", data, off
+                CORE_FMT, data, off
             )
-            off += 24
+            off += CORE_SIZE
             node = {"id": nid, "pos": (px, py, pz)}
         if ext:
             if off + 8 > len(data) - 4:
@@ -64,7 +58,6 @@ def parse_frame(data: bytes):
         "count": count,
         "nodes": nodes,
         "crc_ok": crc_stored == crc_calc,
-        "unknown_flags": flags & ~0x1F,
     }
 
 
@@ -74,53 +67,46 @@ def expect(cond: bool, msg: str) -> None:
 
 
 def test_minimal_valid() -> None:
-    data = (VEC / "minimal_valid.plod").read_bytes()
-    r = parse_frame(data)
-    expect(r["crc_ok"], "minimal_valid CRC must pass")
-    expect(r["count"] == 8, "expect 8 nodes")
-    expect(not (r["flags"] & FLAG_EMBODIED), "core profile")
+    r = parse_frame((VEC / "minimal_valid.plod").read_bytes())
+    expect(r["crc_ok"], "CRC")
+    expect(r["count"] == 8, "8 nodes")
     print("[PASS] minimal_valid.plod")
 
 
 def test_embodied_32b() -> None:
-    data = (VEC / "embodied_32b.plod").read_bytes()
-    r = parse_frame(data)
-    expect(r["crc_ok"], "embodied CRC must pass")
-    expect(r["flags"] & FLAG_EMBODIED, "embodied flag")
-    expect(r["flags"] & FLAG_EXTENDED_META, "extended meta")
+    r = parse_frame((VEC / "embodied_32b.plod").read_bytes())
+    expect(r["crc_ok"], "CRC")
+    expect(bool(r["flags"] & FLAG_EMBODIED), "embodied")
+    expect(bool(r["flags"] & FLAG_EXTENDED_META), "meta")
     expect(r["count"] == 16, "16 nodes")
-    expect("causal_depth" in r["nodes"][0], "meta present")
+    expect("causal_depth" in r["nodes"][0], "depth")
     print("[PASS] embodied_32b.plod")
 
 
 def test_invalid_crc() -> None:
-    data = (VEC / "invalid_crc.plod").read_bytes()
-    r = parse_frame(data)
-    expect(not r["crc_ok"], "invalid_crc must fail CRC")
-    print("[PASS] invalid_crc.plod (CRC correctly rejected)")
+    r = parse_frame((VEC / "invalid_crc.plod").read_bytes())
+    expect(not r["crc_ok"], "CRC must fail")
+    print("[PASS] invalid_crc.plod")
 
 
 def test_unknown_extension() -> None:
-    data = (VEC / "unknown_extension.plod").read_bytes()
-    r = parse_frame(data)
-    expect(r["crc_ok"], "unknown_extension still CRC-valid")
+    r = parse_frame((VEC / "unknown_extension.plod").read_bytes())
+    expect(r["crc_ok"], "CRC")
     expect(r["count"] == 4, "4 nodes")
-    # decoder must not crash on unknown flag bits
-    print("[PASS] unknown_extension.plod (forward-compat)")
+    print("[PASS] unknown_extension.plod")
 
 
 def main() -> int:
     if not VEC.exists() or not list(VEC.glob("*.plod")):
         print("Vectors missing — run: python tests/generate_vectors.py")
         return 1
-    tests = [
+    failed = 0
+    for t in (
         test_minimal_valid,
         test_embodied_32b,
         test_invalid_crc,
         test_unknown_extension,
-    ]
-    failed = 0
-    for t in tests:
+    ):
         try:
             t()
         except Exception as e:
