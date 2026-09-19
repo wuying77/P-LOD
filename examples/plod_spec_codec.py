@@ -4,6 +4,10 @@ P-LOD Spec v1.1 public codec (stdlib only).
 
 Strict encoding: no silent &0xFF truncation — out-of-range values raise ProtocolError.
 node_id 0..65534 only (0xFFFF reserved as GLOBAL_NA).
+
+Usage:
+  python plod_spec_codec.py
+  python plod_spec_codec.py --demo
 """
 
 from __future__ import annotations
@@ -366,5 +370,12 @@ def demo() -> None:
 
 
 if __name__ == "__main__":
-    argparse.ArgumentParser().parse_args()
+    ap = argparse.ArgumentParser(description="P-LOD Spec v1.1 codec")
+    ap.add_argument(
+        "--demo",
+        action="store_true",
+        help="Run encode/decode demo (default if no other action)",
+    )
+    args = ap.parse_args()
+    # Always run demo for CI / README: bare invoke or --demo
     demo()
