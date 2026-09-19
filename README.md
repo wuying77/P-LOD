@@ -9,13 +9,13 @@
 
 **Status:** Prior Art Protocol Specification v1.0/v1.1 & Normative Reference Implementation. Open for global research, inter-operability testing, and benchmark verification.
 
-> **Engineering Note:** SE / WE are protocol-level information-theoretic metaphors — **not** quantum entanglement.
+> SE / WE are protocol-level information-theoretic metaphors — **not** quantum entanglement.
 
 ---
 
-## Single public codec (Spec v1.1)
+## Single public codec
 
-**[`examples/plod_spec_codec.py`](examples/plod_spec_codec.py)** is the only pack/decode implementation that tests and engines must use.
+**[`examples/plod_spec_codec.py`](examples/plod_spec_codec.py)** is the **only** encode/decode path (`encode_frame` / `decode_frame`). Golden vectors, tests, and the reference engine all call this module — no parallel pack/unpack implementations.
 
 | FLAGS | Mask |
 |-------|------|
@@ -23,46 +23,30 @@
 | `IS_EMBODIED_PROFILE` | `0x02` |
 | `HAS_EXTENDED_META` | `0x04` |
 
-- Global/N/A node marker: **`0xFFFF`**
-- CRC-32/ISO-HDLC; mismatch / trailing garbage / bad VERSION → **`ProtocolError`**
-
 ---
 
 ## Emergence profiles
 
-| Profile | Role |
-|---------|------|
-| **`plod.ref.linear_spline.v1`** | **Normative frozen baseline** — pure linear mid/quarter points; no seed, jitter, or smoothstep |
-| `plod.ref.linear_spline.v2` | Experimental — budgets, jitter, constraint projection |
+| CLI | Profile | Role |
+|-----|---------|------|
+| `--profile v1` (default) | `plod.ref.linear_spline.v1` | Normative frozen baseline |
+| `--profile v2` | `plod.ref.linear_spline.v2` | Experimental budgets / jitter |
 
 ---
 
-## Quick start
+## Quick start (copy-paste)
 
 ```bash
 python examples/plod_spec_codec.py --demo
 python examples/reference_emergence_engine.py --profile v1
+python examples/reference_emergence_engine.py --profile v2 --budget constrained
 python examples/horizon_compression_demo.py
 python examples/eval_reconstruction_fidelity.py
 
 python tests/generate_vectors.py
 python tests/run_compliance_tests.py
+python examples/test_plod_spec_codec.py
 ```
-
-Shared metrics: [`examples/plod_metrics.py`](examples/plod_metrics.py) (symmetric Chamfer → RFS; AABB TCS).
-
----
-
-## Pipeline
-
-```text
-Original → SE Extractor (ablation causal_depth) → Encoder (plod_spec_codec)
-  → Binary Frame → decode_frame() → Emergence (v1/v2) → Validator (TCS / RFS)
-```
-
-$$
-\mathrm{causal\_depth}_i = \mathrm{round}\big(255 \cdot \mathrm{clamp}(\Delta E_i / \max_j \Delta E_j,\,0,\,1)\big)
-$$
 
 ---
 
@@ -70,8 +54,8 @@ $$
 
 | Path | Role |
 |------|------|
-| [SPECIFICATION.md](docs/SPECIFICATION.md) | RFC-style wire format |
-| [ROADMAP_AND_APPLICATIONS.md](docs/ROADMAP_AND_APPLICATIONS.md) | Benchmarks A–D |
+| [SPECIFICATION.md](docs/SPECIFICATION.md) | Wire format, version matrix, constraint semantics |
+| [ROADMAP_AND_APPLICATIONS.md](docs/ROADMAP_AND_APPLICATIONS.md) | Benchmarks |
 | [DEFENSIVE_PUBLICATION.md](docs/DEFENSIVE_PUBLICATION.md) | Prior Art |
 
 ## Credits

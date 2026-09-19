@@ -3,7 +3,7 @@
 **P-LOD: Progressive Strong-Entanglement Point Array with Weak-Entanglement Emergence Encoding — A Structural State Representation and Progressive Realization Protocol.**
 
 **Status:** Prior Art Protocol Specification v1.0/v1.1 & Normative Reference Implementation.  
-**Byte order:** **Little-Endian** for all multi-byte integers and IEEE-754 floats.  
+**Byte order:** **Little-Endian**.  
 **License:** MIT · [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md)
 
 > SE / WE are protocol-level information-theoretic metaphors — **not** quantum entanglement.
@@ -12,7 +12,7 @@ $$
 \mathrm{SE} = \mathrm{Nodes} + \mathrm{Edges} + \mathrm{Constraints}
 $$
 
-**Public codec:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py)
+**Sole public codec:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py) (`encode_frame` / `decode_frame`).
 
 ---
 
@@ -25,48 +25,46 @@ $$
 +----------+------------------+---------------------------+--------+
 ```
 
-`node_size` = 24 (Core) or 32 (Embodied), plus **+8** if `HAS_EXTENDED_META`.
+### Implicit Edge Derivation (Derived Edge Rule)
 
-### Implicit Edge Derivation Note (Derived Edge Rule)
-
-Wire format carries **Nodes + Constraints only** (no Edge Table).
-
-For **`plod.ref.linear_spline.v1`**:
-
-1. Sort nodes by `node_id` ascending.
-2. Edges: consecutive pairs + ring close `(last → first)`.
-3. Samples at **t ∈ {0.25, 0.50, 0.75}** on each edge (no seed, jitter, smoothstep).
+No Edge Table on the wire. For **`plod.ref.linear_spline.v1`**: sort by `node_id`, consecutive edges + ring close; samples at **t ∈ {0.25, 0.50, 0.75}**.
 
 ---
 
 ## 2. Header (8 bytes)
 
-| Offset | Size | Field | Type | Description |
-|-------:|-----:|-------|------|-------------|
-| 0 | 2 | `MAGIC` | uint16 | Must be `0x504C` |
-| 2 | 1 | `VERSION` | uint8 | `0x10` (v1.0) or `0x11` (v1.1) |
-| 3 | 1 | `FLAGS` | uint8 | Bitmask (§2.1) |
-| 4 | 2 | `SE_NODE_COUNT` | uint16 | Number of nodes `N` |
-| 6 | 2 | `SEQUENCE_ID` | uint16 | Stream index `0..65535` |
+| Offset | Size | Field | Type |
+|-------:|-----:|-------|------|
+| 0 | 2 | `MAGIC` | uint16 = `0x504C` |
+| 2 | 1 | `VERSION` | uint8 |
+| 3 | 1 | `FLAGS` | uint8 |
+| 4 | 2 | `SE_NODE_COUNT` | uint16 |
+| 6 | 2 | `SEQUENCE_ID` | uint16 |
 
-### 2.1 FLAGS
+### FLAGS
 
 | Bit | Mask | Name |
 |----:|------|------|
 | 0 | `0x01` | `HAS_CONSTRAINT_TABLE` |
 | 1 | `0x02` | `IS_EMBODIED_PROFILE` |
 | 2 | `0x04` | `HAS_EXTENDED_META` |
-| 3–7 | — | Reserved (write 0; ignore on read) |
+| 3–7 | — | Reserved |
 
-v1.0 frames **MUST NOT** set Constraint Table or Extended Meta flags.
+### Version Compatibility Matrix
+
+| VERSION | Wire name | Allowed payload | Forbidden |
+|---------|-----------|-----------------|-----------|
+| `0x10` | **v1.0** | Header + Core or Embodied SE Node Table + CRC | Constraint Table; Extended Meta; flags bit0/bit2 must be 0 |
+| `0x11` | **v1.1** | Full: Core/Embodied, optional Extended Meta, optional Constraint Table | — |
+| other | — | — | **MUST reject** with `ProtocolError` |
 
 ---
 
-## 3. Core Node (24 bytes) — `IS_EMBODIED_PROFILE = 0`
+## 3. Core Node (24 bytes)
 
 | Offset | Size | Field | Type |
 |-------:|-----:|-------|------|
-| 0–1 | 2 | `node_id` | uint16 (`0..65534`; **`0xFFFF` forbidden**) |
+| 0–1 | 2 | `node_id` | uint16 (`0..65534`; `0xFFFF` forbidden) |
 | 2 | 1 | `level` | uint8 (`1..3`) |
 | 3 | 1 | `type_code` | uint8 |
 | 4–15 | 12 | `x, y, z` | float32 × 3 |
@@ -76,67 +74,66 @@ v1.0 frames **MUST NOT** set Constraint Table or Extended Meta flags.
 
 ---
 
-## 4. Embodied Node (32 bytes) — `IS_EMBODIED_PROFILE = 1`
+## 4. Embodied Node (32 bytes)
 
 | Offset | Size | Field | Type |
 |-------:|-----:|-------|------|
 | 0–1 | 2 | `node_id` | uint16 (`0..65534`) |
-| 2 | 1 | `risk_state` | uint8: `0=SAFE`, `1=WATCH`, `2=CRITICAL` |
+| 2 | 1 | `risk_state` | `0=SAFE`, `1=WATCH`, `2=CRITICAL` |
 | 3 | 1 | `sub_system` | uint8 |
-| 4–15 | 12 | `pos_x, pos_y, pos_z` | float32 × 3 |
-| 16–27 | 12 | `vel_x, vel_y, vel_z` | float32 × 3 |
+| 4–15 | 12 | `pos_x,y,z` | float32 × 3 |
+| 16–27 | 12 | `vel_x,y,z` | float32 × 3 |
 | 28–31 | 4 | `phase` | float32 |
 
 ---
 
-## 5. Extended Meta (8 bytes per node) — if `HAS_EXTENDED_META`
+## 5. Extended Meta (8 bytes) — v1.1 only
 
-| Offset | Size | Field | Type |
-|-------:|-----:|-------|------|
-| 0–3 | 4 | `resonance_freq` | float32 |
-| 4 | 1 | `causal_depth` | uint8 (`≥200` = Causal Anchor) |
-| 5–7 | 3 | `pad` | must be `0x00` |
+| Offset | Size | Field |
+|-------:|-----:|-------|
+| 0–3 | 4 | `resonance_freq` float32 |
+| 4 | 1 | `causal_depth` uint8 |
+| 5–7 | 3 | pad = 0 |
 
 ---
 
-## 6. Constraint Table — if `HAS_CONSTRAINT_TABLE`
+## 6. Constraint Table — v1.1 only
 
-Preceded by `uint16 constraint_count` (`M`).
+`uint16 count` + `count × 16` byte entries.
 
-Each **Constraint Entry (16 bytes)**:
+| Offset | Size | Field |
+|-------:|-----:|-------|
+| 0 | 1 | `constraint_type` |
+| 1 | 1 | `cflags` (0) |
+| 2–3 | 2 | `node_a` (`0xFFFF` = global/N/A) |
+| 4–5 | 2 | `node_b` |
+| 6–9 | 4 | `param0` float32 |
+| 10–13 | 4 | `param1` float32 |
+| 14–15 | 2 | reserved (0) |
 
-| Offset | Size | Field | Type |
-|-------:|-----:|-------|------|
-| 0 | 1 | `constraint_type` | uint8 |
-| 1 | 1 | `cflags` | uint8 (must be 0) |
-| 2–3 | 2 | `node_a` | uint16 (`0xFFFF` = global/N/A) |
-| 4–5 | 2 | `node_b` | uint16 (`0xFFFF` = global/N/A) |
-| 6–9 | 4 | `param0` | float32 |
-| 10–13 | 4 | `param1` | float32 |
-| 14–15 | 2 | `reserved` | uint16 (must be 0) |
+### Constraint Semantics
 
-| Type | Code |
-|------|------|
-| Distance | `0x01` |
-| Boundary / Safety | `0x02` |
-| Temporal Link | `0x03` |
-| Symmetry | `0x04` |
+| Type | Code | `plod.ref.linear_spline.v1` | Notes |
+|------|------|------------------------------|--------|
+| **Distance** | `0x01` | **Enforced** when profile applies constraints (v2 constrained/high_fidelity budgets; optional on wire for v1 storage) | Max separation A–B via `param0` |
+| **Boundary / Safety** | `0x02` | **Enforced** under the same rule | Envelope / max radius `param0` |
+| **Temporal Link** | `0x03` | **Pass-through (ignored)** by v1 baseline engine | Reserved for advanced temporal profiles |
+| **Symmetry** | `0x04` | **Pass-through (ignored)** by v1 baseline engine | Reserved for symmetry-aware profiles |
+
+Decoders **MUST** still parse and retain unknown/pass-through constraint rows when present (for forward compatibility). The **v1 normative emergencer** does not alter geometry based on types `0x03`/`0x04`.
 
 ---
 
 ## 7. CRC-32/ISO-HDLC
 
-Polynomial `0x04C11DB7`, init/final XOR `0xFFFFFFFF`, reflected; stored LE uint32.  
-Coverage: Header + Nodes + Constraints; **excludes** CRC field.
+Coverage: Header + Nodes + Constraints; excludes trailing CRC. LE uint32.
 
 ---
 
 ## 8. Metrics
 
-| Name | Meaning |
-|------|--------|
-| **TCS-AABB** | Bounding-box containment proxy |
-| **RFS** | `1 - min(1, CD/bbox_diag)`, CD = symmetric Chamfer |
+**TCS-AABB** = bounding-box containment proxy.  
+**RFS** = `1 - min(1, CD/bbox_diag)` (symmetric Chamfer).
 
 ```text
 TCS-AABB: 1.0000 | Status: AABB Containment PASS (Note: Containment Proxy Verification).
@@ -144,13 +141,9 @@ TCS-AABB: 1.0000 | Status: AABB Containment PASS (Note: Containment Proxy Verifi
 
 ---
 
-## 9. Security & encoding rules
+## 9. Security
 
-- `MAX_SE_NODES` = 65535; `MAX_FRAME_SIZE` = 16 MiB
-- Unique `node_id`; never `0xFFFF` for nodes
-- All floats finite (no NaN/±Inf)
-- Encoders **MUST NOT** silently truncate; out-of-range → `ProtocolError`
-- Decoders reject CRC fail, trailing garbage, truncated tables
+Unique `node_id`; finite floats; no silent truncation; reject unknown VERSION, bad CRC, trailing garbage.
 
 ---
 
@@ -159,8 +152,15 @@ TCS-AABB: 1.0000 | Status: AABB Containment PASS (Note: Containment Proxy Verifi
 | Profile | Role |
 |---------|------|
 | **`plod.ref.linear_spline.v1`** | Normative frozen baseline |
-| `plod.ref.linear_spline.v2` | Experimental |
+| `plod.ref.linear_spline.v2` | Experimental (budgets / jitter / Distance+Boundary projection) |
+
+CLI:
+
+```bash
+python examples/reference_emergence_engine.py --profile v1
+python examples/reference_emergence_engine.py --profile v2 --budget constrained
+```
 
 ---
 
-*P-LOD Spec v1.1 — self-contained RFC-style standard. Prior Art under MIT.*
+*P-LOD Spec v1.1 — self-contained. Prior Art under MIT.*
