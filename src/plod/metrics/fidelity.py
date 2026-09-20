@@ -1,9 +1,7 @@
 """P-LOD reconstruction metrics (stdlib only)."""
-
 from __future__ import annotations
-
 import math
-from typing import List, Sequence, Tuple
+from typing import Sequence, Tuple
 
 Point = Tuple[float, float, float]
 
@@ -23,19 +21,14 @@ def _mean_nn(a: Sequence[Point], b: Sequence[Point], sample: int = 400) -> float
 
 
 def chamfer_distance(
-    a: Sequence[Point],
-    b: Sequence[Point],
-    sample_a: int = 400,
-    sample_b: int = 400,
+    a: Sequence[Point], b: Sequence[Point], sample_a: int = 400, sample_b: int = 400
 ) -> float:
-    """Symmetric mean nearest-neighbor distance."""
     return 0.5 * (_mean_nn(a, b, sample_a) + _mean_nn(b, a, sample_b))
 
 
 def compute_symmetric_chamfer_distance(
     a: Sequence[Point], b: Sequence[Point], sample_a: int = 400, sample_b: int = 400
 ) -> float:
-    """Alias for chamfer_distance (symmetric mean NN)."""
     return chamfer_distance(a, b, sample_a=sample_a, sample_b=sample_b)
 
 
@@ -52,7 +45,6 @@ def bbox_diagonal(pts: Sequence[Point]) -> float:
 def reconstruction_fidelity_score(
     ground_truth: Sequence[Point], reconstructed: Sequence[Point]
 ) -> Tuple[float, float, float]:
-    """RFS = max(0, 1 - min(1, CD / bbox_diag)); CD = symmetric Chamfer."""
     cd = chamfer_distance(ground_truth, reconstructed)
     diag = bbox_diagonal(ground_truth)
     cd_norm = min(1.0, cd / diag)
@@ -63,15 +55,6 @@ def reconstruction_fidelity_score(
 def topological_consistency_score(
     anchors: Sequence[Point], emerged: Sequence[Point], pad_frac: float = 0.05
 ) -> float:
-    """
-    TCS-AABB (Bounding-box Containment Proxy).
-
-    Fraction of emerged points inside the SE axis-aligned bounding box expanded
-    by pad_frac * diagonal. This is a containment check — not a full graph-edit
-    or homology metric.
-
-    Empty anchors or empty emerged → 0.0
-    """
     if not anchors or not emerged:
         return 0.0
     xs, ys, zs = zip(*anchors)
@@ -90,6 +73,5 @@ def topological_consistency_score(
     return ok / len(emerged)
 
 
-# Alias for explicit naming in reports
 containment_score = topological_consistency_score
 tcs_aabb = topological_consistency_score
