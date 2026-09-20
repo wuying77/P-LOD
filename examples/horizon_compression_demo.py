@@ -1,32 +1,33 @@
 #!/usr/bin/env python3
 """
-P-LOD Horizon Compression Demo — Ablation-based Minimal Independent SE (stdlib only)
+P-LOD Horizon Compression Demo — ε-Minimal Independent SE (stdlib only)
 
-Mathematical objective (Minimal Independent Structure S*):
+Objective:
+  S*(ε) = arg min |S|  s.t.  D(X, G(S)) ≤ ε
 
-  S* = arg min_{S ⊆ X} |S|   subject to   D(X, G(S)) ≤ ε
+Modes:
+  1) Fixed top-k ablation ranking (legacy / rate-distortion sweeps)
+  2) ε-constrained dynamic minimality: greedily strip lowest-impact nodes
+     until any further removal would breach ε (proxy D = NN residual / bbox_diag)
 
-where G is the emergence map (plod.ref.linear_spline.v1) and D is a normalized
-topological distortion (e.g. symmetric Chamfer / bbox diagonal).
+No-structure reject:
+  If structural confidence is low (flat ΔE field on pure noise), emit
+  STATUS: STRUCTURAL_CONFIDENCE_LOW instead of a forced pseudo-skeleton.
 
-Node removal loss (leave-one-out ablation):
-  ΔE_i = D(X, G(S \\ {p_i})) - D(X, G(S))
-  causal_depth_i = round(255 * clamp(ΔE_i / max_j(ΔE_j), 0, 1))
-  depth >= 200 → Causal Anchor (non-degenerate degree of freedom)
-
-Heuristic ranking for candidate selection also mixes density + curvature proxies;
-the formal causal_depth is always the ablation-normalized quantity above.
-
-Wire: Spec v1.1 via plod_spec_codec.encode_frame
+CLI:
+  python horizon_compression_demo.py
+  python horizon_compression_demo.py --epsilon 0.05
+  python horizon_compression_demo.py --epsilon 0.05 --max-pool 120
 """
 
 from __future__ import annotations
 
+import argparse
 import math
 import random
 import sys
 from pathlib import Path
-from typing import List, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
@@ -35,6 +36,10 @@ if str(_HERE) not in sys.path:
 from plod_spec_codec import SENode, encode_frame
 
 Point = Tuple[float, float, float]
+
+# Structural confidence thresholds (heuristic; Spec §0 relative C_i)
+CMAX_REJECT = 50
+GINI_REJECT = 0.12
 
 
 def generate_volume(n: int = 10_000, seed: int = 42) -> List[Point]:
@@ -87,11 +92,24 @@ def local_curvature_proxy(centroid: Point, bucket: Sequence[Point]) -> float:
     mx = sum(d[0] for d in dirs) / len(dirs)
     my = sum(d[1] for d in dirs) / len(dirs)
     mz = sum(d[2] for d in dirs) / len(dirs)
-    return sum((d[0] - mx) ** 2 + (d[1] - my) ** 2 + (d[2] - mz) ** 2 for d in dirs) / len(dirs)
+    return sum((d[0] - mx) ** 2 + (d[1] - my) ** 2 + (d[2] - mz) ** 2 for d in dirs) / len(
+        dirs
+    )
+
+
+def bbox_diag(pts: Sequence[Point]) -> float:
+    if not pts:
+        return 1.0
+    xs, ys, zs = zip(*pts)
+    return (
+        math.sqrt(
+            (max(xs) - min(xs)) ** 2 + (max(ys) - min(ys)) ** 2 + (max(zs) - min(zs)) ** 2
+        )
+        or 1.0
+    )
 
 
 def nn_recon_error(anchors: Sequence[Point], cloud: Sequence[Point], sample: int = 400) -> float:
-    """Proxy for D(X, G(S)) using nearest-anchor residual (fast ablation surrogate)."""
     if not anchors:
         return 1e9
     step = max(1, len(cloud) // sample)
@@ -105,32 +123,62 @@ def nn_recon_error(anchors: Sequence[Point], cloud: Sequence[Point], sample: int
     return total / max(count, 1)
 
 
+def normalized_D(anchors: Sequence[Point], cloud: Sequence[Point], sample: int = 400) -> float:
+    """Proxy D = NN residual / bbox diagonal (comparable to Spec RFS scale)."""
+    return nn_recon_error(anchors, cloud, sample) / bbox_diag(cloud)
+
+
 def ablation_delta(
     candidates: List[Point], cloud: Sequence[Point], idx: int, base_err: float
 ) -> float:
-    """ΔE_i = E_without_i - E_full  (non-negative structural loss)."""
     reduced = [c for i, c in enumerate(candidates) if i != idx]
     err = nn_recon_error(reduced, cloud, sample=300)
     return max(0.0, err - base_err)
 
 
-def extract_se_ablation(
+def _gini(values: Sequence[float]) -> float:
+    xs = sorted(max(0.0, float(v)) for v in values)
+    n = len(xs)
+    if n == 0:
+        return 0.0
+    s = sum(xs)
+    if s <= 1e-15:
+        return 0.0
+    acc = sum((i + 1) * x for i, x in enumerate(xs))
+    return (2.0 * acc) / (n * s) - (n + 1.0) / n
+
+
+def structural_confidence(pool: Sequence[dict]) -> Tuple[bool, str, dict]:
+    """
+    Return (ok, reason, stats). Low confidence → No Structure Detected.
+    Uses relative C_i field / Gini of ΔE ranks — not absolute physics.
+    """
+    if not pool:
+        return False, "empty candidate pool", {"c_max": 0, "gini": 0.0}
+    depths = [int(c.get("causal_depth", 0)) for c in pool]
+    deltas = [float(c.get("delta_e", 0.0)) for c in pool]
+    c_max = max(depths)
+    g = _gini([d / 255.0 for d in depths])
+    mean_de = sum(deltas) / len(deltas)
+    stats = {"c_max": c_max, "gini": g, "mean_delta_e": mean_de}
+    if c_max < CMAX_REJECT and g < GINI_REJECT:
+        return (
+            False,
+            f"C_max={c_max}<{CMAX_REJECT} and Gini={g:.3f}<{GINI_REJECT}",
+            stats,
+        )
+    if mean_de < 1e-9 and c_max < CMAX_REJECT:
+        return False, f"mean ΔE≈0 and C_max={c_max}", stats
+    return True, "ok", stats
+
+
+def _build_ranked_pool(
     pts: Sequence[Point],
     *,
     grid: float = 0.35,
-    max_nodes: int = 80,
-    w_density: float = 0.25,
-    w_curvature: float = 0.25,
-    w_ablation: float = 0.50,
+    pool_cap: int = 120,
     quiet: bool = False,
-) -> List[SENode]:
-    """
-    Approximate S* by ranking cell centroids with ablation loss, then taking top |S|=max_nodes.
-
-    This is a practical heuristic for the discrete program:
-      S* = arg min |S|  s.t.  D(X, G(S)) ≤ ε
-    Full combinatorial search is NP-hard; ablation ranks non-degenerate anchors.
-    """
+) -> List[dict]:
     cells = density_map(pts, grid)
     cands: List[dict] = []
     dens_max = max(len(b) for b in cells.values()) or 1
@@ -143,84 +191,192 @@ def extract_se_ablation(
     for c in cands:
         c["pre"] = 0.5 * c["density"] + 0.5 * min(1.0, c["curvature"] * 2.0)
     cands.sort(key=lambda x: x["pre"], reverse=True)
-    pool = cands[: min(120, len(cands))]
+    pool = cands[: min(pool_cap, len(cands))]
     anchors = [c["pos"] for c in pool]
     base_err = nn_recon_error(anchors, pts, sample=300)
-
-    if not quiet:
-        print("=== Ablation-based Minimal Independent SE (S*) ===")
-        print("S* ≈ arg min |S|  s.t.  D(X, G(S)) ≤ ε")
-        print(f"Volume points:     {len(pts):,}")
-        print(f"Ablation pool:     {len(pool)}")
-        print(f"E_full (base):     {base_err:.6f}")
 
     for i in range(len(pool)):
         pool[i]["delta_e"] = ablation_delta(anchors, pts, i, base_err)
 
     max_de = max(c["delta_e"] for c in pool) or 1.0
-
     for c in pool:
-        # Task-conditioned causal depth from removal loss:
-        # C_i = round(255 * clamp(ΔE_i / max_j(ΔE_j), 0, 1))
         ratio = max(0.0, min(1.0, c["delta_e"] / max_de))
         c["causal_depth"] = int(round(255 * ratio))
         c["score"] = (
-            w_density * c["density"]
-            + w_curvature * min(1.0, c["curvature"] * 2.0)
-            + w_ablation * ratio
+            0.25 * c["density"]
+            + 0.25 * min(1.0, c["curvature"] * 2.0)
+            + 0.50 * ratio
         )
-
     pool.sort(key=lambda x: x["score"], reverse=True)
-    selected = pool[:max_nodes]
 
     if not quiet:
-        print(f"Selected |S|:      {len(selected)}")
-        print(
-            f"causal_depth range: "
-            f"{min(c['causal_depth'] for c in selected)} .. {max(c['causal_depth'] for c in selected)}"
-        )
-        n_anchor = sum(1 for c in selected if c["causal_depth"] >= 200)
-        print(f"Causal Anchors (depth≥200): {n_anchor}")
-        print()
-        print("Top 8 (ΔE / formal causal_depth):")
-        for i, c in enumerate(selected[:8], 1):
-            x, y, z = c["pos"]
-            print(
-                f"  #{i:02d}  ΔE={c['delta_e']:.6f}  depth={c['causal_depth']:3d}  "
-                f"score={c['score']:.4f}  pos=({x:+.3f},{y:+.3f},{z:+.3f})"
-            )
+        print(f"Ablation pool: {len(pool)}  E_full={base_err:.6f}  maxΔE={max_de:.6f}")
+    return pool
 
+
+def _pool_to_nodes(selected: Sequence[dict]) -> List[SENode]:
     nodes: List[SENode] = []
     for i, c in enumerate(selected):
+        # resonance_freq: Profile-Defined Placeholder / demo fill only (Spec §5)
         nodes.append(
             SENode(
                 i + 1,
                 c["pos"],
                 risk_state=1 if c["causal_depth"] >= 200 else 0,
                 sub_system=0x10 if c["causal_depth"] >= 200 else 0x30,
-                resonance_freq=1.0 + 0.05 * (i % 17),
+                resonance_freq=1.0 + 0.05 * (i % 17),  # placeholder, not measured physics
                 causal_depth=c["causal_depth"],
             )
         )
     return nodes
 
 
-def main() -> None:
-    pts = generate_volume(10_000)
-    raw = len(pts) * 24 + 64
-    nodes = extract_se_ablation(pts, max_nodes=80)
-    frame = encode_frame(nodes, embodied=True, extended_meta=True)
-    ratio = raw / max(len(frame), 1)
+def extract_se_ablation(
+    pts: Sequence[Point],
+    *,
+    grid: float = 0.35,
+    max_nodes: int = 80,
+    w_density: float = 0.25,
+    w_curvature: float = 0.25,
+    w_ablation: float = 0.50,
+    quiet: bool = False,
+) -> List[SENode]:
+    """Fixed top-k ranking (used by rate-distortion / adversarial scripts)."""
+    del w_density, w_curvature, w_ablation  # ranking weights fixed inside pool builder
+    pool = _build_ranked_pool(pts, grid=grid, pool_cap=max(120, max_nodes), quiet=quiet)
+    ok, reason, stats = structural_confidence(pool)
+    if not ok and not quiet:
+        print(f"WARNING structural confidence low: {reason} stats={stats}")
+    selected = pool[:max_nodes]
+    if not quiet:
+        print(f"Selected |S|={len(selected)} (fixed top-k)")
+        n_anchor = sum(1 for c in selected if c["causal_depth"] >= 200)
+        print(f"High-Causal-Depth Anchors (C≥200): {n_anchor}")
+    return _pool_to_nodes(selected)
 
+
+def extract_se_epsilon_minimal(
+    pts: Sequence[Point],
+    *,
+    epsilon: float = 0.05,
+    grid: float = 0.35,
+    pool_cap: int = 120,
+    quiet: bool = False,
+) -> Tuple[Optional[List[SENode]], dict]:
+    """
+    ε-constrained dynamic minimality:
+      start from ranked pool; repeatedly drop the lowest-score remaining node
+      while D(S) ≤ ε; stop when any further drop would exceed ε.
+
+    Returns (nodes_or_None, report). None nodes ⇒ No Structure Detected.
+    """
+    pool = _build_ranked_pool(pts, grid=grid, pool_cap=pool_cap, quiet=quiet)
+    ok, reason, conf = structural_confidence(pool)
+    report: dict = {
+        "epsilon": epsilon,
+        "confidence_ok": ok,
+        "confidence_reason": reason,
+        "confidence_stats": conf,
+        "status": "OK",
+    }
+
+    if not ok:
+        report["status"] = "STRUCTURAL_CONFIDENCE_LOW"
+        report["message"] = (
+            "No stable independent structure detected. Frame skipped or baseline pass-through."
+        )
+        if not quiet:
+            print(f"STATUS: STRUCTURAL_CONFIDENCE_LOW | REASON: {reason}")
+            print(report["message"])
+        return None, report
+
+    # Working set: highest-score first; drop from the tail (lowest score)
+    working = list(pool)
+    def D_of(sel: Sequence[dict]) -> float:
+        return normalized_D([c["pos"] for c in sel], pts, sample=350)
+
+    d0 = D_of(working)
+    if d0 > epsilon:
+        # Even full pool fails ε — return full pool as best effort
+        report["n_star"] = len(working)
+        report["final_D"] = d0
+        report["status"] = "EPSILON_INFEASIBLE_FULL_POOL"
+        if not quiet:
+            print(
+                f"Target ε={epsilon:.4f} | full pool D={d0:.4f} > ε — cannot meet budget"
+            )
+        return _pool_to_nodes(working), report
+
+    # Greedy strip from lowest score
+    while len(working) > 1:
+        # try removing the lowest-score node (last in score-sorted list)
+        trial = working[:-1]
+        d_trial = D_of(trial)
+        if d_trial > epsilon:
+            break
+        working = trial
+
+    final_d = D_of(working)
+    report["n_star"] = len(working)
+    report["final_D"] = final_d
+    report["status"] = "EPSILON_MINIMAL"
+    if not quiet:
+        print(
+            f"Target Epsilon (ε): {epsilon:.3f} | "
+            f"Discovered Minimal Independent Nodes N*(ε): {len(working)} | "
+            f"Final Reconstruction Error D: {final_d:.4f}"
+        )
+        n_anchor = sum(1 for c in working if c["causal_depth"] >= 200)
+        print(f"High-Causal-Depth Anchors in S*(ε): {n_anchor}")
+    return _pool_to_nodes(working), report
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="P-LOD horizon / ε-minimal SE extraction")
+    ap.add_argument(
+        "--epsilon",
+        type=float,
+        default=None,
+        help="If set, run ε-minimal dynamic extraction (e.g. 0.05)",
+    )
+    ap.add_argument("--max-nodes", type=int, default=80, help="Fixed top-k when no --epsilon")
+    ap.add_argument("--max-pool", type=int, default=120, help="Ablation candidate pool size")
+    ap.add_argument("--points", type=int, default=10_000)
+    args = ap.parse_args()
+
+    pts = generate_volume(args.points)
+    raw = len(pts) * 24 + 64
+
+    if args.epsilon is not None:
+        nodes, report = extract_se_epsilon_minimal(
+            pts, epsilon=args.epsilon, pool_cap=args.max_pool
+        )
+        if nodes is None:
+            print()
+            print("=== Horizon compression ===")
+            print("STATUS: STRUCTURAL_CONFIDENCE_LOW — no SE frame emitted")
+            return
+        frame = encode_frame(nodes, embodied=True, extended_meta=True)
+        print()
+        print("=== Horizon compression (ε-minimal S*) ===")
+        print(f"Status:              {report.get('status')}")
+        print(f"Raw dense estimate:  {raw:,} bytes")
+        print(f"SE-Frame:            {len(frame):,} bytes")
+        print(f"N*(ε):               {report.get('n_star')}")
+        print(f"Final D:             {report.get('final_D', float('nan')):.4f}")
+        print(f"Collapse ratio:      {raw / max(len(frame), 1):.1f}×")
+        return
+
+    nodes = extract_se_ablation(pts, max_nodes=args.max_nodes, quiet=False)
+    frame = encode_frame(nodes, embodied=True, extended_meta=True)
     print()
-    print("=== Horizon compression (minimal independent SE) ===")
+    print("=== Horizon compression (fixed top-k) ===")
     print(f"Raw dense estimate:  {raw:,} bytes ({raw/1024:.1f} KB)")
     print(f"SE-Frame:            {len(frame):,} bytes ({len(frame)/1024:.2f} KB)")
-    print(f"Collapse ratio:      {ratio:.1f}×")
+    print(f"Collapse ratio:      {raw / max(len(frame), 1):.1f}×")
     print()
     print("S* = arg min |S|  s.t.  D(X, G(S)) ≤ ε")
-    print("ΔE_i = E_without_i - E_full")
-    print("causal_depth_i = round(255 * clamp(ΔE_i / max(ΔE), 0, 1))")
+    print("Use --epsilon 0.05 for dynamic N*(ε) search.")
 
 
 if __name__ == "__main__":
