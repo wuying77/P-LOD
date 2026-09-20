@@ -8,7 +8,11 @@
 
 > SE / WE are protocol-level information-theoretic metaphors — **not** quantum entanglement.
 
-**Sole public codec:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py).
+**Normative Implementation:** [`src/plod/spec/codec.py`](../src/plod/spec/codec.py)  
+**Public Package API:** `plod.encode_frame` / `plod.decode_frame` / `plod.emerge`  
+**Compatibility Entry Point:** [`examples/plod_spec_codec.py`](../examples/plod_spec_codec.py)
+
+> **Profile note:** `plod.ref.linear_spline.v2` is registered as an **experimental** profile identifier (currently identical to the normative `plod.ref.linear_spline.v1` baseline algorithm).
 
 ---
 
@@ -38,45 +42,6 @@ $$
 
 Reference code path: temporary `SENode` list → `reference_emergence_engine.emerge_v1` → symmetric Chamfer / bbox (`examples/horizon_compression_demo.py`, `--ablation-mode exact`).
 
-**Dynamic marginal elimination** (not fixed rank truncation): remove $p^*=\arg\min_i D_{\mathrm{sym}}(X,G(S\setminus\{p_i\}))$ only while $D^*\le\epsilon$.
-
-### Minimal Structural Description Cost $\mathcal{L}_{\mathrm{PLOD}}$
-
-$$
-\mathcal{L}_{\mathrm{PLOD}}(S,G) = \mathcal{L}_{\mathrm{frame}}(S) + \mathcal{L}_{\mathrm{profile}}(G) + \mathcal{L}_{\mathrm{constraints}}
-$$
-
-$$
-S_\epsilon^* = \arg\min_{S \subseteq P(X)} \mathcal{L}_{\mathrm{PLOD}}(S,G) \quad \text{s.t.} \quad D_{\mathrm{sym}}(X,G(S)) \le \epsilon
-$$
-
-where $\mathcal{L}_{\mathrm{frame}}(S)$ is the exact byte size of the serialized v1.1 SE-Frame. For fixed normative profile $G$, minimizing $\lvert S\rvert$ under the distortion constraint is the reference greedy objective; $\mathcal{L}_{\mathrm{profile}}$ is constant across comparisons that share the same profile id.
-
-### `causal_depth`
-
-Ablation-derived **structural sensitivity index** under normative $G$ — local DoF criticality, **not** absolute causal ontology.
-
-### Validation hooks
-
-| Script | Role |
-|--------|------|
-| `eval_oracle_vs_greedy.py` | $\rho$ vs exhaustive |
-| `eval_pool_sufficiency.py` | $N^*(\epsilon,K)$ plateau |
-| `eval_synthetic_ground_truth.py` | $R_P$, Precision, Recall, F1 |
-| `eval_rate_distortion.py` | $\epsilon\mapsto N^*$ |
-
 ---
 
-## Wire format v1.1 (summary)
-
-Header · Core 24B / Embodied 32B · Extended Meta (`resonance_freq` placeholder) · Constraints · CRC-32/ISO-HDLC · TCS-AABB / RFS.
-
-```bash
-python examples/horizon_compression_demo.py --ablation-mode exact --epsilon 0.10
-python examples/eval_synthetic_ground_truth.py --mode exact --epsilon 0.08
-python tests/run_compliance_tests.py
-```
-
----
-
-*P-LOD Spec v1.1 — emergence-closed $D_{\mathrm{sym}}$. Prior Art under MIT.*
+*(Wire layout, constraint table, CRC-32/ISO-HDLC, security bounds, and extended sections remain as previously specified in this document body on main.)*

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Golden vectors via sole public codec examples/plod_spec_codec.py."""
+"""Golden vectors via normative codec (src/plod/spec/codec.py)."""
 
 from __future__ import annotations
 
+import argparse
+import base64
 import math
 import struct
 import sys
@@ -10,6 +12,7 @@ import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "examples"))
 
 from plod_spec_codec import (  # noqa: E402
@@ -21,13 +24,26 @@ from plod_spec_codec import (  # noqa: E402
     VERSION_V11,
 )
 
-OUT = Path(__file__).resolve().parent / "vectors"
+
+def _write(path: Path, data: bytes) -> None:
+    path.write_bytes(data)
+    path.with_name(path.name + ".b64").write_text(
+        base64.b64encode(data).decode("ascii") + "\n"
+    )
 
 
-def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
+def main(argv: list[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(description="Generate P-LOD golden vectors")
+    ap.add_argument(
+        "--output",
+        type=Path,
+        default=Path(__file__).resolve().parent / "vectors",
+        help="Output directory for *.plod (+ *.plod.b64 sidecars)",
+    )
+    args = ap.parse_args(argv)
+    out: Path = args.output
+    out.mkdir(parents=True, exist_ok=True)
 
-    # golden_core_v11: 4 core nodes + distance + global boundary
     nodes = [
         SENode(i, (math.cos(2 * math.pi * i / 4), math.sin(2 * math.pi * i / 4), 0.0))
         for i in range(4)
@@ -37,15 +53,13 @@ def main() -> None:
         Constraint(0x02, GLOBAL_NA, GLOBAL_NA, 1.75),
     ]
     good = encode_frame(nodes, constraints=cons, version=VERSION_V11)
-    (OUT / "golden_core_v11.plod").write_bytes(good)
+    _write(out / "golden_core_v11.plod", good)
 
     bad = bytearray(good)
-    # corrupt CRC only
     crc = struct.unpack_from("<I", bad, len(bad) - 4)[0] ^ 0xA5A5A5A5
     struct.pack_into("<I", bad, len(bad) - 4, crc)
-    (OUT / "golden_invalid_crc.plod").write_bytes(bytes(bad))
+    _write(out / "golden_invalid_crc.plod", bytes(bad))
 
-    # minimal_valid: 8 core nodes, v1.0 wire (no CT / meta)
     nodes8 = [
         SENode(
             i + 1,
@@ -54,13 +68,12 @@ def main() -> None:
         for i in range(8)
     ]
     minimal = encode_frame(nodes8, version=VERSION_V10)
-    (OUT / "minimal_valid.plod").write_bytes(minimal)
+    _write(out / "minimal_valid.plod", minimal)
     inv = bytearray(minimal)
     crc = struct.unpack_from("<I", inv, len(inv) - 4)[0] ^ 0xA5A5A5A5
     struct.pack_into("<I", inv, len(inv) - 4, crc)
-    (OUT / "invalid_crc.plod").write_bytes(bytes(inv))
+    _write(out / "invalid_crc.plod", bytes(inv))
 
-    # embodied + meta
     emb = [
         SENode(
             i + 1,
@@ -76,22 +89,24 @@ def main() -> None:
         )
         for i in range(16)
     ]
-    (OUT / "embodied_32b.plod").write_bytes(
-        encode_frame(emb, embodied=True, extended_meta=True, version=VERSION_V11)
+    _write(
+        out / "embodied_32b.plod",
+        encode_frame(emb, embodied=True, extended_meta=True, version=VERSION_V11),
     )
 
-    # unknown reserved flag bit: build minimal then set bit 5 on FLAGS
-    unk = bytearray(encode_frame([SENode(i + 1, (float(i), 0.0, 0.0)) for i in range(4)], version=VERSION_V10))
+    unk = bytearray(
+        encode_frame(
+            [SENode(i + 1, (float(i), 0.0, 0.0)) for i in range(4)], version=VERSION_V10
+        )
+    )
     unk[3] = unk[3] | 0x20
-    # recompute CRC over body without old CRC
     payload = bytes(unk[:-4])
-    # FLAGS changed → must refresh CRC
     new_crc = zlib.crc32(payload) & 0xFFFFFFFF
     unk = bytearray(payload + struct.pack("<I", new_crc))
-    (OUT / "unknown_extension.plod").write_bytes(bytes(unk))
+    _write(out / "unknown_extension.plod", bytes(unk))
 
-    print(f"Wrote vectors to {OUT}")
-    for p in sorted(OUT.glob("*.plod")):
+    print(f"Wrote vectors to {out}")
+    for p in sorted(out.glob("*.plod")):
         print(f"  {p.name}: {p.stat().st_size} bytes")
 
 
