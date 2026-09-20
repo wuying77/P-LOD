@@ -1,13 +1,21 @@
 #!/usr/bin/env python3
 """
-P-LOD Horizon Compression Demo — Ablation-based SE extraction (stdlib only)
+P-LOD Horizon Compression Demo — Ablation-based Minimal Independent SE (stdlib only)
 
-Score(p) = w1*Density + w2*Curvature + w3*AblationLoss
+Mathematical objective (Minimal Independent Structure S*):
 
-Formal causal_depth:
-  ΔE_i = E_without_i - E_full
+  S* = arg min_{S ⊆ X} |S|   subject to   D(X, G(S)) ≤ ε
+
+where G is the emergence map (plod.ref.linear_spline.v1) and D is a normalized
+topological distortion (e.g. symmetric Chamfer / bbox diagonal).
+
+Node removal loss (leave-one-out ablation):
+  ΔE_i = D(X, G(S \\ {p_i})) - D(X, G(S))
   causal_depth_i = round(255 * clamp(ΔE_i / max_j(ΔE_j), 0, 1))
-  depth >= 200 → Causal Anchor
+  depth >= 200 → Causal Anchor (non-degenerate degree of freedom)
+
+Heuristic ranking for candidate selection also mixes density + curvature proxies;
+the formal causal_depth is always the ablation-normalized quantity above.
 
 Wire: Spec v1.1 via plod_spec_codec.encode_frame
 """
@@ -83,6 +91,7 @@ def local_curvature_proxy(centroid: Point, bucket: Sequence[Point]) -> float:
 
 
 def nn_recon_error(anchors: Sequence[Point], cloud: Sequence[Point], sample: int = 400) -> float:
+    """Proxy for D(X, G(S)) using nearest-anchor residual (fast ablation surrogate)."""
     if not anchors:
         return 1e9
     step = max(1, len(cloud) // sample)
@@ -99,6 +108,7 @@ def nn_recon_error(anchors: Sequence[Point], cloud: Sequence[Point], sample: int
 def ablation_delta(
     candidates: List[Point], cloud: Sequence[Point], idx: int, base_err: float
 ) -> float:
+    """ΔE_i = E_without_i - E_full  (non-negative structural loss)."""
     reduced = [c for i, c in enumerate(candidates) if i != idx]
     err = nn_recon_error(reduced, cloud, sample=300)
     return max(0.0, err - base_err)
@@ -112,7 +122,15 @@ def extract_se_ablation(
     w_density: float = 0.25,
     w_curvature: float = 0.25,
     w_ablation: float = 0.50,
+    quiet: bool = False,
 ) -> List[SENode]:
+    """
+    Approximate S* by ranking cell centroids with ablation loss, then taking top |S|=max_nodes.
+
+    This is a practical heuristic for the discrete program:
+      S* = arg min |S|  s.t.  D(X, G(S)) ≤ ε
+    Full combinatorial search is NP-hard; ablation ranks non-degenerate anchors.
+    """
     cells = density_map(pts, grid)
     cands: List[dict] = []
     dens_max = max(len(b) for b in cells.values()) or 1
@@ -129,10 +147,12 @@ def extract_se_ablation(
     anchors = [c["pos"] for c in pool]
     base_err = nn_recon_error(anchors, pts, sample=300)
 
-    print("=== Ablation-based SE extraction ===")
-    print(f"Volume points:     {len(pts):,}")
-    print(f"Ablation pool:     {len(pool)}")
-    print(f"E_full (base):     {base_err:.6f}")
+    if not quiet:
+        print("=== Ablation-based Minimal Independent SE (S*) ===")
+        print("S* ≈ arg min |S|  s.t.  D(X, G(S)) ≤ ε")
+        print(f"Volume points:     {len(pts):,}")
+        print(f"Ablation pool:     {len(pool)}")
+        print(f"E_full (base):     {base_err:.6f}")
 
     for i in range(len(pool)):
         pool[i]["delta_e"] = ablation_delta(anchors, pts, i, base_err)
@@ -140,8 +160,8 @@ def extract_se_ablation(
     max_de = max(c["delta_e"] for c in pool) or 1.0
 
     for c in pool:
-        # Formal Spec formula:
-        # causal_depth_i = round(255 * clamp(ΔE_i / max_j(ΔE_j), 0, 1))
+        # Task-conditioned causal depth from removal loss:
+        # C_i = round(255 * clamp(ΔE_i / max_j(ΔE_j), 0, 1))
         ratio = max(0.0, min(1.0, c["delta_e"] / max_de))
         c["causal_depth"] = int(round(255 * ratio))
         c["score"] = (
@@ -153,21 +173,22 @@ def extract_se_ablation(
     pool.sort(key=lambda x: x["score"], reverse=True)
     selected = pool[:max_nodes]
 
-    print(f"Selected SE nodes: {len(selected)}")
-    print(
-        f"causal_depth range: "
-        f"{min(c['causal_depth'] for c in selected)} .. {max(c['causal_depth'] for c in selected)}"
-    )
-    n_anchor = sum(1 for c in selected if c["causal_depth"] >= 200)
-    print(f"Causal Anchors (depth>=200): {n_anchor}")
-    print()
-    print("Top 8 (ablation ΔE / formal causal_depth):")
-    for i, c in enumerate(selected[:8], 1):
-        x, y, z = c["pos"]
+    if not quiet:
+        print(f"Selected |S|:      {len(selected)}")
         print(
-            f"  #{i:02d}  ΔE={c['delta_e']:.6f}  depth={c['causal_depth']:3d}  "
-            f"score={c['score']:.4f}  pos=({x:+.3f},{y:+.3f},{z:+.3f})"
+            f"causal_depth range: "
+            f"{min(c['causal_depth'] for c in selected)} .. {max(c['causal_depth'] for c in selected)}"
         )
+        n_anchor = sum(1 for c in selected if c["causal_depth"] >= 200)
+        print(f"Causal Anchors (depth≥200): {n_anchor}")
+        print()
+        print("Top 8 (ΔE / formal causal_depth):")
+        for i, c in enumerate(selected[:8], 1):
+            x, y, z = c["pos"]
+            print(
+                f"  #{i:02d}  ΔE={c['delta_e']:.6f}  depth={c['causal_depth']:3d}  "
+                f"score={c['score']:.4f}  pos=({x:+.3f},{y:+.3f},{z:+.3f})"
+            )
 
     nodes: List[SENode] = []
     for i, c in enumerate(selected):
@@ -192,13 +213,14 @@ def main() -> None:
     ratio = raw / max(len(frame), 1)
 
     print()
-    print("=== Horizon compression (ablation SE) ===")
+    print("=== Horizon compression (minimal independent SE) ===")
     print(f"Raw dense estimate:  {raw:,} bytes ({raw/1024:.1f} KB)")
     print(f"SE-Frame:            {len(frame):,} bytes ({len(frame)/1024:.2f} KB)")
     print(f"Collapse ratio:      {ratio:.1f}×")
     print()
-    print("causal_depth_i = round(255 * clamp(ΔE_i / max(ΔE), 0, 1))")
+    print("S* = arg min |S|  s.t.  D(X, G(S)) ≤ ε")
     print("ΔE_i = E_without_i - E_full")
+    print("causal_depth_i = round(255 * clamp(ΔE_i / max(ΔE), 0, 1))")
 
 
 if __name__ == "__main__":
