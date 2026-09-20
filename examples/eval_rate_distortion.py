@@ -2,25 +2,16 @@
 """
 P-LOD Rate–Distortion evaluation (stdlib only).
 
-Sweeps |S| = N_SE ∈ {4,8,16,32,64,128,256} on a high-entropy point cloud X,
-extracts ablation-ranked SE skeleton, emerges via plod.ref.linear_spline.v1,
-and reports frame bytes vs Chamfer distortion D(X, G(S)).
+Sweeps |S| = N_SE ∈ {4,8,16,32,64,128,256} on high-entropy X,
+ablation-ranked SE → plod.ref.linear_spline.v1 → Chamfer D(X,G(S)).
 
-Objective (Spec):
   S* = arg min |S|  s.t.  D(X, G(S)) ≤ ε
 
-Outputs:
-  - Markdown rate–distortion table (stdout)
-  - docs/rate_distortion_curve.svg (always)
-  - docs/rate_distortion_curve.png (if matplotlib available)
-
-Usage:
-  python examples/eval_rate_distortion.py
+Outputs Markdown table + docs/rate_distortion_curve.svg (+ PNG if matplotlib).
 """
 
 from __future__ import annotations
 
-import math
 import sys
 from pathlib import Path
 from typing import List, Sequence, Tuple
@@ -31,30 +22,25 @@ if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
 from horizon_compression_demo import extract_se_ablation, generate_volume
-from plod_metrics import bbox_diagonal, chamfer_distance, reconstruction_fidelity_score
+from plod_metrics import bbox_diagonal, reconstruction_fidelity_score
 from plod_spec_codec import SENode, encode_frame
 from reference_emergence_engine import emerge_v1
 
 Point = Tuple[float, float, float]
-
 N_SE_GRID = (4, 8, 16, 32, 64, 128, 256)
 
 
 def emerge_and_recon(nodes: Sequence[SENode]) -> List[Point]:
     anchors = [n.pos for n in nodes]
-    emerged = emerge_v1(list(nodes))
-    return list(anchors) + list(emerged)
+    return list(anchors) + list(emerge_v1(list(nodes)))
 
 
 def write_svg(path: Path, rows: List[dict]) -> None:
-    """Minimal SVG scatter+polyline for N_SE vs normalized Chamfer (no deps)."""
     w, h, pad = 720, 420, 60
     xs = [r["n_se"] for r in rows]
     ys = [r["cd_norm"] for r in rows]
     xmin, xmax = min(xs), max(xs)
-    ymin, ymax = 0.0, max(max(ys), 1e-6)
-    # pad y a bit
-    ymax = ymax * 1.15 if ymax > 0 else 1.0
+    ymin, ymax = 0.0, max(max(ys), 1e-6) * 1.15
 
     def sx(x: float) -> float:
         return pad + (x - xmin) / (xmax - xmin or 1) * (w - 2 * pad)
@@ -101,11 +87,9 @@ def try_write_png(path: Path, rows: List[dict]) -> bool:
     except Exception:
         return False
     fig, ax = plt.subplots(figsize=(8, 4.5))
-    xs = [r["n_se"] for r in rows]
-    ys = [r["cd_norm"] for r in rows]
-    ax.plot(xs, ys, "o-", color="#2563eb", linewidth=2, markersize=7)
+    ax.plot([r["n_se"] for r in rows], [r["cd_norm"] for r in rows], "o-", color="#2563eb")
     ax.set_xscale("log", base=2)
-    ax.set_xlabel(r"$N_{SE} = |S|$ (SE nodes)")
+    ax.set_xlabel(r"$N_{SE}=|S|$")
     ax.set_ylabel(r"normalized Chamfer $D(X,G(S))$")
     ax.set_title("P-LOD Rate–Distortion Curve")
     ax.grid(True, which="both", alpha=0.3)
@@ -124,20 +108,16 @@ def main() -> None:
 
     cloud = generate_volume(10_000, seed=42)
     raw_bytes = len(cloud) * 24 + 64
-    diag = bbox_diagonal(cloud)
-    print(f"|X| = {len(cloud):,} points   raw≈{raw_bytes:,} B   bbox_diag={diag:.4f}")
+    print(f"|X| = {len(cloud):,} points   raw≈{raw_bytes:,} B   bbox_diag={bbox_diagonal(cloud):.4f}")
     print()
 
     rows: List[dict] = []
     for n_se in N_SE_GRID:
-        # Suppress verbose ablation prints by temporarily patching print? keep brief:
         print(f"--- N_SE = {n_se} ---")
-        nodes = extract_se_ablation(cloud, max_nodes=n_se, grid=0.35)
-        # extract prints details; acceptable for demo
+        nodes = extract_se_ablation(cloud, max_nodes=n_se, grid=0.35, quiet=True)
         frame = encode_frame(nodes, embodied=True, extended_meta=True)
         recon = emerge_and_recon(nodes)
         rfs, cd, cd_norm = reconstruction_fidelity_score(cloud, recon)
-        cr = raw_bytes / max(len(frame), 1)
         rows.append(
             {
                 "n_se": n_se,
@@ -145,7 +125,7 @@ def main() -> None:
                 "cd": cd,
                 "cd_norm": cd_norm,
                 "rfs": rfs,
-                "cr": cr,
+                "cr": raw_bytes / max(len(frame), 1),
             }
         )
 
@@ -164,19 +144,16 @@ def main() -> None:
     svg_path = _ROOT / "docs" / "rate_distortion_curve.svg"
     write_svg(svg_path, rows)
     print(f"Wrote {svg_path.relative_to(_ROOT)}")
-
     png_path = _ROOT / "docs" / "rate_distortion_curve.png"
     if try_write_png(png_path, rows):
-        print(f"Wrote {png_path.relative_to(_ROOT)} (matplotlib)")
+        print(f"Wrote {png_path.relative_to(_ROOT)}")
     else:
-        print("PNG skipped (matplotlib not installed); SVG is the canonical curve artifact.")
+        print("PNG skipped (no matplotlib); SVG is canonical.")
 
-    # Highlight knee: first N where cd_norm < 0.08 if any
     knee = next((r for r in rows if r["cd_norm"] <= 0.08), rows[-1])
-    print()
     print(
-        f"Illustrative operating point: N_SE={knee['n_se']} → "
-        f"{knee['bytes']} B, D/diag={knee['cd_norm']:.4f}, RFS={knee['rfs']:.4f}"
+        f"\nIllustrative point: N_SE={knee['n_se']} → {knee['bytes']} B, "
+        f"D/diag={knee['cd_norm']:.4f}, RFS={knee['rfs']:.4f}"
     )
 
 
