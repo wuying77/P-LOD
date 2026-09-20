@@ -22,17 +22,50 @@ $$
 
 ## Single public codec (Source of Truth)
 
-**[`examples/plod_spec_codec.py`](examples/plod_spec_codec.py)** — sole `encode_frame` / `decode_frame`.
+**Package:** [`src/plod/spec/codec.py`](src/plod/spec/codec.py) — sole normative `encode_frame` / `decode_frame`.  
+**Compat shim:** [`examples/plod_spec_codec.py`](examples/plod_spec_codec.py) re-exports the same API for existing demos/tests.
 
 ---
 
-## Quick start
+## Quick Start & Installation
+
+Install from a local checkout (PyPI name: **`plod-protocol`**):
 
 ```bash
+pip install -e .
+# or, after release:
+# pip install plod-protocol
+```
+
+### 1-Minute Minimal Usage
+
+```python
+from plod import encode_frame, decode_frame, SENode, emerge
+
+# 1. Minimal independent structure (SE nodes)
+nodes = [
+    SENode(node_id=1, pos=(10.0, 20.0, 30.0), causal_depth=255),
+    SENode(node_id=2, pos=(15.0, 25.0, 35.0), causal_depth=220),
+]
+
+# 2. Binary protocol encode
+frame_bytes = encode_frame(nodes)
+
+# 3. Binary protocol decode
+decoded = decode_frame(frame_bytes)
+
+# 4. Normative emergence (plod.ref.linear_spline.v1)
+emerged = emerge(decoded.nodes, profile="v1")
+print(f"P-LOD active — reconstructed {len(emerged)} spatial samples from {len(decoded.nodes)} SE nodes.")
+```
+
+### Developer demos (repo checkout)
+
+```bash
+export PYTHONPATH=src
 python examples/plod_spec_codec.py --demo
 python examples/reference_emergence_engine.py --profile v1
 python examples/horizon_compression_demo.py
-python examples/eval_rate_distortion.py
 python tests/run_compliance_tests.py
 ```
 
