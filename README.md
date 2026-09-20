@@ -8,7 +8,7 @@
 [![Prior Art](https://img.shields.io/badge/prior%20art-defensive%20publication-success.svg)](docs/DEFENSIVE_PUBLICATION.md)
 [![CI](https://img.shields.io/badge/CI-compliance-success.svg)](.github/workflows/ci.yml)
 
-**Status:** **v0.1.0 Official Milestone** — Prior Art Protocol Specification v1.0/v1.1 & Normative Reference Implementation.
+**Status:** **Protocol v0.1.0** (GitHub Release) · **Python package `plod-protocol` 0.1.1**
 
 > SE / WE are protocol-level information-theoretic metaphors — **not** quantum entanglement.
 
@@ -16,14 +16,15 @@ $$
 S^* = \arg\min_{S \subseteq X} \lvert S\rvert \quad \text{s.t.} \quad D\bigl(X, G(S)\bigr) \le \epsilon
 $$
 
-**Release notes:** [docs/RELEASE_v0.1.0.md](docs/RELEASE_v0.1.0.md)
+**Release notes:** [docs/RELEASE_v0.1.0.md](docs/RELEASE_v0.1.0.md) · **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
 ## Single public codec (Source of Truth)
 
-**Package:** [`src/plod/spec/codec.py`](src/plod/spec/codec.py) — sole normative `encode_frame` / `decode_frame`.  
-**Compat shim:** [`examples/plod_spec_codec.py`](examples/plod_spec_codec.py) re-exports the same API for existing demos/tests.
+**Normative Implementation:** [`src/plod/spec/codec.py`](src/plod/spec/codec.py) — sole normative `encode_frame` / `decode_frame`.  
+**Public Package API:** `plod.encode_frame` / `plod.decode_frame` / `plod.emerge`.  
+**Compatibility Layer:** [`examples/plod_spec_codec.py`](examples/plod_spec_codec.py).
 
 ---
 
@@ -96,6 +97,7 @@ Formal $S^*$: [Spec §0](docs/SPECIFICATION.md).
 | Path | Role |
 |------|------|
 | [RELEASE_v0.1.0.md](docs/RELEASE_v0.1.0.md) | Official release notes |
+| [CHANGELOG.md](CHANGELOG.md) | Package changelog |
 | [SPECIFICATION.md](docs/SPECIFICATION.md) | $S^*$ math + wire format |
 | [DEFENSIVE_PUBLICATION.md](docs/DEFENSIVE_PUBLICATION.md) | Prior Art |
 
