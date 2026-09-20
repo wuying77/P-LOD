@@ -12,78 +12,71 @@
 
 ---
 
-## 0. Dual-Layer Mathematical Specification: Oracle vs Reference Extractor
+## 0. Dual-Layer Math: Oracle vs Reference Extractor
 
-### 1. Theoretical Global Oracle ($S_{\epsilon,X}^*$)
-
-$$
-S_{\epsilon,X}^* = \arg\min_{S \subseteq X} \lvert S\rvert \quad \text{subject to} \quad D_{\mathrm{sym}}\bigl(X, G(S)\bigr) \le \epsilon
-$$
-
-Ideal information limit; generally intractable for large $\lvert X\rvert$.
-
-### 2. Reference Candidate-Constrained Extractor ($\hat{S}_{\epsilon,P}^*$)
+### Theoretical Oracle
 
 $$
-P(X) = \mathrm{CandidateSelect}(X, K_{\mathrm{pool}})
+S_{\epsilon,X}^* = \arg\min_{S \subseteq X} \lvert S\rvert \quad \text{s.t.} \quad D_{\mathrm{sym}}(X, G(S)) \le \epsilon
+$$
+
+### Reference Extractor (engineering)
+
+$$
+P(X)=\mathrm{CandidateSelect}(X,K_{\mathrm{pool}})
 $$
 
 $$
-\hat{S}_{\epsilon,P}^* = \mathrm{GreedyMarginalElimination}\bigl(P(X), G, D_{\mathrm{sym}}, \epsilon\bigr)
+\hat{S}_{\epsilon,P}^* = \mathrm{GreedyMarginalElimination}(P(X), G, D_{\mathrm{sym}}, \epsilon)
 $$
 
-**Dynamic marginal elimination (normative reference loop):** each round, for every remaining $p_i \in S$, evaluate
+Each round evaluates **full emergence loop**:
 
 $$
-D_i = D_{\mathrm{sym}}\bigl(X, G(S \setminus \{p_i\})\bigr)
+S \xrightarrow{G=\texttt{plod.ref.linear\_spline.v1}} G(S) \xrightarrow{D_{\mathrm{sym}}} D_{\mathrm{sym}}(X, G(S))
 $$
 
-remove $p^* = \arg\min_i D_i$ **only if** $D^* \le \epsilon$; otherwise stop. This is **not** fixed rank-ordered truncation of a static list.
+Reference code path: temporary `SENode` list → `reference_emergence_engine.emerge_v1` → symmetric Chamfer / bbox (`examples/horizon_compression_demo.py`, `--ablation-mode exact`).
 
-Full chain for every trial deletion:
+**Dynamic marginal elimination** (not fixed rank truncation): remove $p^*=\arg\min_i D_{\mathrm{sym}}(X,G(S\setminus\{p_i\}))$ only while $D^*\le\epsilon$.
 
-$$
-S \longrightarrow G(S) \longrightarrow D_{\mathrm{sym}}(X, G(S))
-$$
-
-with normative $G =$ `plod.ref.linear_spline.v1` when `--ablation-mode exact`.
-
-**$\epsilon$-minimality certificate over the returned set:**
+### Minimal Structural Description Cost $\mathcal{L}_{\mathrm{PLOD}}$
 
 $$
-\forall p_i \in \hat{S}_{\epsilon,P}^*,\quad D_{\mathrm{sym}}\bigl(X, G(\hat{S}_{\epsilon,P}^* \setminus \{p_i\})\bigr) > \epsilon
+\mathcal{L}_{\mathrm{PLOD}}(S,G) = \mathcal{L}_{\mathrm{frame}}(S) + \mathcal{L}_{\mathrm{profile}}(G) + \mathcal{L}_{\mathrm{constraints}}
 $$
 
-### 3. Distortion $D_{\mathrm{sym}}$
+$$
+S_\epsilon^* = \arg\min_{S \subseteq P(X)} \mathcal{L}_{\mathrm{PLOD}}(S,G) \quad \text{s.t.} \quad D_{\mathrm{sym}}(X,G(S)) \le \epsilon
+$$
 
-Normalized symmetric Chamfer (under-coverage + hallucination).
+where $\mathcal{L}_{\mathrm{frame}}(S)$ is the exact byte size of the serialized v1.1 SE-Frame. For fixed normative profile $G$, minimizing $\lvert S\rvert$ under the distortion constraint is the reference greedy objective; $\mathcal{L}_{\mathrm{profile}}$ is constant across comparisons that share the same profile id.
 
-### 4. `causal_depth` terminology
+### `causal_depth`
 
-**`causal_depth` is an ablation-derived structural sensitivity index** computed under the normative reference generator $G$. It quantifies **local degree-of-freedom criticality** within a given candidate set and ablation experiment. It is **not** a claim of absolute causal inference ontology, interventional causality, or physical causation outside the chosen $(G, D_{\mathrm{sym}}, P(X))$ experiment.
+Ablation-derived **structural sensitivity index** under normative $G$ — local DoF criticality, **not** absolute causal ontology.
 
-### 5. Empirical validation hooks
+### Validation hooks
 
 | Script | Role |
 |--------|------|
-| `eval_oracle_vs_greedy.py` | Exhaustive vs greedy $\rho$ on small $\lvert P\rvert$ |
-| `eval_pool_sufficiency.py` | $N^*(\epsilon, K_{\mathrm{pool}})$ plateau |
-| `eval_rate_distortion.py` | $\epsilon \mapsto N^*$ |
-| `eval_structural_stability.py` | Multi-seed $SS_i$ |
-| `eval_synthetic_ground_truth.py` | $S_{\mathrm{true}}\to X\to\hat{S}$ Precision/Recall |
+| `eval_oracle_vs_greedy.py` | $\rho$ vs exhaustive |
+| `eval_pool_sufficiency.py` | $N^*(\epsilon,K)$ plateau |
+| `eval_synthetic_ground_truth.py` | $R_P$, Precision, Recall, F1 |
+| `eval_rate_distortion.py` | $\epsilon\mapsto N^*$ |
 
 ---
 
-## 1–11. Wire format (v1.1 core)
+## Wire format v1.1 (summary)
 
-Header · Core/Embodied nodes · Extended Meta (`resonance_freq` = Profile-Defined Placeholder) · Constraints · CRC-32/ISO-HDLC · TCS-AABB / RFS.
+Header · Core 24B / Embodied 32B · Extended Meta (`resonance_freq` placeholder) · Constraints · CRC-32/ISO-HDLC · TCS-AABB / RFS.
 
 ```bash
-python examples/horizon_compression_demo.py --ablation-mode exact --epsilon 0.12
-python examples/eval_synthetic_ground_truth.py --mode exact --epsilon 0.12
+python examples/horizon_compression_demo.py --ablation-mode exact --epsilon 0.10
+python examples/eval_synthetic_ground_truth.py --mode exact --epsilon 0.08
 python tests/run_compliance_tests.py
 ```
 
 ---
 
-*P-LOD Spec v1.1 — dual-layer Oracle vs Extractor. Prior Art under MIT.*
+*P-LOD Spec v1.1 — emergence-closed $D_{\mathrm{sym}}$. Prior Art under MIT.*
