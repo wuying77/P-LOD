@@ -1,5 +1,6 @@
 """P-LOD reference emergence (normative v1 + experimental v2)."""
 from __future__ import annotations
+
 from typing import List, Sequence, Tuple
 
 from plod.spec.codec import SENode
@@ -7,6 +8,15 @@ from plod.spec.codec import SENode
 PROFILE_V1 = "plod.ref.linear_spline.v1"
 PROFILE_V2 = "plod.ref.linear_spline.v2"
 T_SAMPLES = (0.25, 0.50, 0.75)
+
+_SUPPORTED_PROFILES = frozenset(
+    {
+        "v1",
+        "v2",
+        PROFILE_V1,
+        PROFILE_V2,
+    }
+)
 
 
 def lerp3(a, b, t):
@@ -40,6 +50,12 @@ def emerge_v2(nodes: Sequence[SENode], **kwargs) -> List[Tuple[float, float, flo
 
 
 def emerge(nodes, profile="v1", **kwargs):
+    """Dispatch emergence profile. Unknown profiles fail loudly (no silent fallback)."""
+    if profile not in _SUPPORTED_PROFILES:
+        raise ValueError(
+            f"Unknown emergence profile {profile!r}. "
+            f"Supported: ['v1', 'v2', {PROFILE_V1!r}, {PROFILE_V2!r}]"
+        )
     if profile in ("v1", PROFILE_V1):
         return emerge_v1(nodes)
     return emerge_v2(nodes, **kwargs)

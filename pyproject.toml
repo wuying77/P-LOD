@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "plod-protocol"
-version = "0.1.0"
+version = "0.1.1"
 description = "Deterministic, RFC-style Progressive Structural State Representation protocol and emergence framework."
 readme = "README.md"
 authors = [
@@ -18,7 +18,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Information Analysis",
     "Typing :: Typed",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = []
 
 [project.urls]
