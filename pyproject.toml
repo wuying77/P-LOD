@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plod-protocol"
+version = "0.1.1"
+description = "Deterministic, RFC-style Progressive Structural State Representation protocol and emergence framework."
+readme = "README.md"
+authors = [
+    { name = "Dimension Zero Protocol Team" }
+]
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Typing :: Typed",
+]
+requires-python = ">=3.8"
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/wuying77/P-LOD"
+Documentation = "https://github.com/wuying77/P-LOD/tree/main/docs"
+Repository = "https://github.com/wuying77/P-LOD.git"
+"Bug Tracker" = "https://github.com/wuying77/P-LOD/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+plod = ["py.typed"]

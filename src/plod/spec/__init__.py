@@ -1,20 +1,4 @@
-"""Backward-compatible entry: examples/plod_spec_codec.py → plod.spec.codec
-
-Normative implementation lives in src/plod/spec/codec.py.
-This module re-exports the public API so existing demos/tests keep working.
-"""
-from __future__ import annotations
-
-import sys
-from pathlib import Path
-
-_ROOT = Path(__file__).resolve().parents[1]
-_SRC = _ROOT / "src"
-if _SRC.is_dir() and str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
-
-from plod.spec.codec import *  # noqa: F401,F403
-from plod.spec.codec import (
+from .codec import (
     FLAG_HAS_CONSTRAINT_TABLE,
     FLAG_HAS_EXTENDED_META,
     FLAG_IS_EMBODIED_PROFILE,
@@ -30,6 +14,7 @@ from plod.spec.codec import (
     decode_frame,
     encode_frame,
 )
+from .models import PLODFrame
 
 __all__ = [
     "encode_frame",
@@ -37,6 +22,7 @@ __all__ = [
     "SENode",
     "Constraint",
     "DecodedFrame",
+    "PLODFrame",
     "ProtocolError",
     "MAGIC",
     "VERSION_V10",
