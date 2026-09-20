@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """
-P-LOD Horizon Compression — two-stage ε-minimal SE extraction (stdlib only)
+P-LOD Horizon Compression — greedy ε-minimal SE over candidate space P(X)
 
-Selection / evaluation alignment:
-  --ablation-mode exact  → ΔE and D both use G = plod.ref.linear_spline.v1
-                           (chain edges, t∈{0.25,0.50,0.75}) + symmetric Chamfer
-  --ablation-mode fast   → NN residual proxy (legacy speed path)
+Two-stage protocol (Spec §0):
+  1) P(X) = CandidateSelect(X, K_pool)
+  2) S*_ε = arg min_{S ⊆ P(X)} |S|  s.t.  D_sym(X, G(S)) ≤ ε
 
-Stage A: density + curvature candidate pool
-Stage B: greedy strip lowest-impact nodes while D(X, G(S)) ≤ ε
+Stage B uses **dynamic greedy marginal elimination**:
+  each round recompute D_sym(X, G(S\\{p_i})) for all remaining p_i;
+  drop the node with smallest D_i while D* ≤ ε; stop when any removal exceeds ε.
+
+G = plod.ref.linear_spline.v1 (t ∈ {0.25,0.50,0.75})
+D_sym = normalized symmetric Chamfer (cover + hallucinate penalty)
 
 CLI:
-  python horizon_compression_demo.py --ablation-mode exact --epsilon 0.08
-  python horizon_compression_demo.py --ablation-mode fast --epsilon 0.08
+  python horizon_compression_demo.py --ablation-mode exact --epsilon 0.10
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ import math
 import random
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
@@ -54,16 +56,10 @@ def generate_volume(n: int = 10_000, seed: int = 42) -> List[Point]:
 
 def perturb_cloud(pts: Sequence[Point], seed: int, sigma: float = 0.02) -> List[Point]:
     rng = random.Random(seed)
-    out = []
-    for x, y, z in pts:
-        out.append(
-            (
-                x + rng.gauss(0, sigma),
-                y + rng.gauss(0, sigma),
-                z + rng.gauss(0, sigma),
-            )
-        )
-    return out
+    return [
+        (x + rng.gauss(0, sigma), y + rng.gauss(0, sigma), z + rng.gauss(0, sigma))
+        for x, y, z in pts
+    ]
 
 
 def _cell_key(p: Point, grid: float) -> Tuple[int, int, int]:
@@ -77,8 +73,7 @@ def _cell_key(p: Point, grid: float) -> Tuple[int, int, int]:
 def density_map(pts: Sequence[Point], grid: float) -> dict:
     cells: dict = {}
     for p in pts:
-        k = _cell_key(p, grid)
-        cells.setdefault(k, []).append(p)
+        cells.setdefault(_cell_key(p, grid), []).append(p)
     return cells
 
 
@@ -108,10 +103,8 @@ def local_curvature_proxy(centroid: Point, bucket: Sequence[Point]) -> float:
 
 
 def emerge_linear_spline_v1(anchors: Sequence[Point]) -> List[Point]:
-    """Faithful G = plod.ref.linear_spline.v1 (implicit edges by sort order)."""
     if len(anchors) < 2:
         return list(anchors)
-    # Stable order by position hash so leave-one-out is consistent
     ordered = sorted(anchors, key=lambda p: (round(p[0], 6), round(p[1], 6), round(p[2], 6)))
     out: List[Point] = list(ordered)
     n = len(ordered)
@@ -128,18 +121,17 @@ def emerge_linear_spline_v1(anchors: Sequence[Point]) -> List[Point]:
     return out
 
 
-def D_exact(anchors: Sequence[Point], cloud: Sequence[Point], sample: int = 500) -> float:
-    """Normalized Chamfer between G(S) and X (selection == evaluation metric)."""
+def D_sym(anchors: Sequence[Point], cloud: Sequence[Point], sample: int = 450) -> float:
+    """Normalized symmetric Chamfer between X and G(S)."""
     if not anchors:
         return 1e9
     recon = emerge_linear_spline_v1(anchors)
     cd = chamfer_distance(cloud, recon, sample_a=sample, sample_b=min(sample, len(recon)))
-    diag = bbox_diagonal(cloud)
-    return cd / diag
+    return cd / bbox_diagonal(cloud)
 
 
-def D_fast(anchors: Sequence[Point], cloud: Sequence[Point], sample: int = 400) -> float:
-    """NN residual / bbox (legacy fast path)."""
+def D_fast_nn(anchors: Sequence[Point], cloud: Sequence[Point], sample: int = 400) -> float:
+    """Fast NN residual / bbox (legacy). Still one-sided; prefer exact for claims."""
     if not anchors:
         return 1e9
     step = max(1, len(cloud) // sample)
@@ -155,8 +147,8 @@ def D_fast(anchors: Sequence[Point], cloud: Sequence[Point], sample: int = 400) 
 
 def D_of(anchors: Sequence[Point], cloud: Sequence[Point], mode: str) -> float:
     if mode == "exact":
-        return D_exact(anchors, cloud)
-    return D_fast(anchors, cloud)
+        return D_sym(anchors, cloud)
+    return D_fast_nn(anchors, cloud)
 
 
 def _gini(values: Sequence[float]) -> float:
@@ -177,6 +169,7 @@ def stage_a_candidates(
     grid: float = 0.35,
     pool_cap: int = 48,
 ) -> List[dict]:
+    """P(X) = CandidateSelect(X, K_pool)."""
     cells = density_map(pts, grid)
     dens_max = max((len(b) for b in cells.values()), default=1) or 1
     cands: List[dict] = []
@@ -229,43 +222,50 @@ def structural_confidence(pool: Sequence[dict]) -> Tuple[bool, str, dict]:
     return True, "ok", stats
 
 
-def stage_b_epsilon_minimal(
+def greedy_marginal_elimination(
     pool: List[dict],
     cloud: Sequence[Point],
     epsilon: float,
     mode: str,
 ) -> Tuple[List[dict], float]:
     """
-    Greedy elimination by ascending ΔE:
-      try drop lowest-ΔE remaining node; keep if D still ≤ ε.
+    Dynamic greedy backward elimination:
+      while |S|>1:
+        for each p_i in S: D_i = D(X, G(S\\{p_i}))
+        p* = argmin D_i
+        if D* ≤ ε: S ← S\\{p*}
+        else: stop  (S is ε-minimal over remaining set)
     """
+    # work on indices into a stable list of dicts
     working = list(pool)
-    # Process removals in ascending delta_e order (prefer dropping low-impact first)
-    order = sorted(range(len(working)), key=lambda i: working[i]["delta_e"])
-    removed = set()
 
-    def current_anchors() -> List[Point]:
-        return [working[i]["pos"] for i in range(len(working)) if i not in removed]
+    def anchors_of(S: List[dict]) -> List[Point]:
+        return [c["pos"] for c in S]
 
-    d0 = D_of(current_anchors(), cloud, mode)
-    if d0 > epsilon:
-        return working, d0  # infeasible at full pool
+    d_cur = D_of(anchors_of(working), cloud, mode)
+    if d_cur > epsilon:
+        return working, d_cur
 
-    for i in order:
-        if i in removed:
-            continue
-        if len(working) - len(removed) <= 1:
+    while len(working) > 1:
+        best_i = -1
+        best_d = 1e18
+        for i in range(len(working)):
+            trial = working[:i] + working[i + 1 :]
+            d_i = D_of(anchors_of(trial), cloud, mode)
+            if d_i < best_d:
+                best_d = d_i
+                best_i = i
+        if best_d <= epsilon:
+            working = working[:best_i] + working[best_i + 1 :]
+            d_cur = best_d
+        else:
+            # every single removal would breach ε → ε-minimal
             break
-        removed.add(i)
-        d_try = D_of(current_anchors(), cloud, mode)
-        if d_try > epsilon:
-            removed.discard(i)  # essential — keep
 
-    kept = [working[i] for i in range(len(working)) if i not in removed]
-    # re-rank kept for causal_depth display
-    kept = rank_by_ablation(kept, cloud, mode)
-    final_d = D_of([c["pos"] for c in kept], cloud, mode)
-    return kept, final_d
+    # refresh causal_depth on final set
+    working = rank_by_ablation(working, cloud, mode)
+    final_d = D_of(anchors_of(working), cloud, mode)
+    return working, final_d
 
 
 def _pool_to_nodes(selected: Sequence[dict]) -> List[SENode]:
@@ -277,7 +277,7 @@ def _pool_to_nodes(selected: Sequence[dict]) -> List[SENode]:
                 c["pos"],
                 risk_state=1 if c["causal_depth"] >= 200 else 0,
                 sub_system=0x10 if c["causal_depth"] >= 200 else 0x30,
-                resonance_freq=1.0 + 0.05 * (i % 17),  # placeholder
+                resonance_freq=1.0 + 0.05 * (i % 17),
                 causal_depth=c["causal_depth"],
             )
         )
@@ -293,7 +293,6 @@ def extract_se_ablation(
     mode: str = "fast",
     **_kw,
 ) -> List[SENode]:
-    """Fixed top-k after Stage A (+ ablation rank). Backward-compatible API."""
     pool = stage_a_candidates(pts, grid=grid, pool_cap=max(48, max_nodes))
     pool = rank_by_ablation(pool, pts, mode)
     selected = pool[:max_nodes]
@@ -305,13 +304,13 @@ def extract_se_ablation(
 def extract_se_epsilon_minimal(
     pts: Sequence[Point],
     *,
-    epsilon: float = 0.08,
+    epsilon: float = 0.10,
     grid: float = 0.35,
-    pool_cap: int = 48,
+    pool_cap: int = 40,
     quiet: bool = False,
     mode: str = "exact",
 ) -> Tuple[Optional[List[SENode]], dict]:
-    """Stage A candidate discovery + Stage B ε-constrained greedy elimination."""
+    """P(X) → greedy marginal elimination → S*_ε."""
     pool = stage_a_candidates(pts, grid=grid, pool_cap=pool_cap)
     pool = rank_by_ablation(pool, pts, mode)
     ok, reason, conf = structural_confidence(pool)
@@ -322,6 +321,7 @@ def extract_se_epsilon_minimal(
         "confidence_reason": reason,
         "confidence_stats": conf,
         "status": "OK",
+        "pool_size": len(pool),
     }
     if not ok:
         report["status"] = "STRUCTURAL_CONFIDENCE_LOW"
@@ -338,10 +338,10 @@ def extract_se_epsilon_minimal(
         report["final_D"] = d_full
         report["status"] = "EPSILON_INFEASIBLE_FULL_POOL"
         if not quiet:
-            print(f"Target ε={epsilon:.4f} | full pool D={d_full:.4f} > ε")
+            print(f"Target ε={epsilon:.4f} | |P(X)| D={d_full:.4f} > ε")
         return _pool_to_nodes(pool), report
 
-    kept, final_d = stage_b_epsilon_minimal(pool, pts, epsilon, mode)
+    kept, final_d = greedy_marginal_elimination(pool, pts, epsilon, mode)
     report["n_star"] = len(kept)
     report["final_D"] = final_d
     report["status"] = "EPSILON_MINIMAL"
@@ -349,10 +349,11 @@ def extract_se_epsilon_minimal(
         print(
             f"Target Epsilon (ε): {epsilon:.3f} | "
             f"Minimal Independent Skeleton N*(ε): {len(kept)} | "
-            f"Achieved Loss: {final_d:.4f} | mode={mode}"
+            f"Achieved Loss D_sym: {final_d:.4f} | mode={mode}"
         )
+        # ε-minimality check note: every single further removal would exceed ε by construction
         n_anchor = sum(1 for c in kept if c["causal_depth"] >= 200)
-        print(f"High-Causal-Depth Anchors in S*(ε): {n_anchor}")
+        print(f"High-Causal-Depth Anchors in S*_ε: {n_anchor}")
     return _pool_to_nodes(kept), report
 
 
@@ -361,7 +362,7 @@ def main() -> None:
     ap.add_argument("--epsilon", type=float, default=None)
     ap.add_argument("--ablation-mode", choices=("exact", "fast"), default="exact")
     ap.add_argument("--max-nodes", type=int, default=80)
-    ap.add_argument("--max-pool", type=int, default=48)
+    ap.add_argument("--max-pool", type=int, default=40)
     ap.add_argument("--points", type=int, default=10_000)
     args = ap.parse_args()
 
@@ -378,22 +379,23 @@ def main() -> None:
             return
         frame = encode_frame(nodes, embodied=True, extended_meta=True)
         print()
-        print("=== Horizon compression (two-stage ε-minimal) ===")
+        print("=== Horizon compression (greedy marginal ε-minimal) ===")
         print(f"Status:              {report.get('status')}")
-        print(f"Ablation mode:       {mode}")
+        print(f"Ablation mode:       {mode} (D_sym if exact)")
+        print(f"|P(X)| pool:         {report.get('pool_size')}")
         print(f"Raw dense estimate:  {raw:,} bytes")
         print(f"SE-Frame:            {len(frame):,} bytes")
         print(f"N*(ε):               {report.get('n_star')}")
-        print(f"Achieved Loss:       {report.get('final_D', float('nan')):.4f}")
+        print(f"Achieved D_sym:      {report.get('final_D', float('nan')):.4f}")
         print(f"Collapse ratio:      {raw / max(len(frame), 1):.1f}×")
         return
 
     nodes = extract_se_ablation(pts, max_nodes=args.max_nodes, mode=mode)
     frame = encode_frame(nodes, embodied=True, extended_meta=True)
     print()
-    print("=== Horizon compression (fixed top-k) ===")
+    print("=== Horizon compression (fixed top-k over P(X)) ===")
     print(f"mode={mode} | SE-Frame={len(frame)} B | ratio={raw / max(len(frame), 1):.1f}×")
-    print("Use --epsilon 0.08 --ablation-mode exact for N*(ε).")
+    print("Use --epsilon 0.10 --ablation-mode exact for greedy S*_ε.")
 
 
 if __name__ == "__main__":
