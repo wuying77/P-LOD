@@ -277,6 +277,10 @@ def decode_frame(data: bytes) -> DecodedFrame:
                 _check_finite(v, name)
             if nid == GLOBAL_NA:
                 raise ProtocolError("node_id must not be 0xFFFF (GLOBAL_NA reserved)")
+            if risk < 0 or risk > 2:
+                raise ProtocolError(f"risk_state={risk} out of range [0..2]")
+            if sub < 0 or sub > 255:
+                raise ProtocolError(f"sub_system={sub} out of range [0..255]")
             node = SENode(
                 nid, (px, py, pz), risk_state=risk, sub_system=sub, vel=(vx, vy, vz), phase=phase
             )
