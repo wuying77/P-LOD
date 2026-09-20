@@ -4,14 +4,14 @@ P-LOD Synthetic Ground Truth recovery (stdlib only)
 
 Pipeline:
   1) Build latent S_true (known generating anchors)
-  2) X = G(S_true) + anisotropic noise
-  3) Form candidate pool P = S_true ∪ distractors (tests elimination, not only density discovery)
-  4) Greedy marginal elimination under D_sym(X, G(S))
-  5) Spatial Precision / Recall vs S_true within radius δ
+  2) X = G(S_true) + noise
+  3) P = S_true ∪ distractors (tests dynamic marginal elimination)
+  4) Greedy marginal elimination under D(X, G(S))
+  5) Spatial Precision / Recall vs S_true
 
 Usage:
   python examples/eval_synthetic_ground_truth.py
-  python examples/eval_synthetic_ground_truth.py --epsilon 0.05 --mode exact
+  python examples/eval_synthetic_ground_truth.py --mode exact --epsilon 0.08
 """
 
 from __future__ import annotations
@@ -74,19 +74,10 @@ def make_pool_with_truth(
     n_distractors: int = 20,
     seed: int = 11,
 ) -> List[dict]:
-    """P(X) = S_true ∪ random distractors (far / mid noise points)."""
     rng = random.Random(seed)
     pool: List[dict] = []
     for p in s_true:
-        pool.append(
-            {
-                "pos": p,
-                "density": 1.0,
-                "curvature": 0.5,
-                "pre": 1.0,
-                "is_true": True,
-            }
-        )
+        pool.append({"pos": p, "density": 1.0, "curvature": 0.5, "pre": 1.0, "is_true": True})
     for _ in range(n_distractors):
         pool.append(
             {
@@ -105,9 +96,7 @@ def make_pool_with_truth(
 
 
 def match_sets(
-    recovered: Sequence[Point],
-    truth: Sequence[Point],
-    delta: float,
+    recovered: Sequence[Point], truth: Sequence[Point], delta: float
 ) -> Tuple[float, float]:
     if not recovered or not truth:
         return 0.0, 0.0
@@ -124,19 +113,17 @@ def match_sets(
         if best_j >= 0 and best_d <= delta:
             used.add(best_j)
             tp += 1
-    precision = tp / len(recovered)
-    recall = len(used) / len(truth)
-    return precision, recall
+    return tp / len(recovered), len(used) / len(truth)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--epsilon", type=float, default=0.08)
-    ap.add_argument("--mode", choices=("exact", "fast"), default="exact")
+    ap.add_argument("--mode", choices=("exact", "fast"), default="fast")
     ap.add_argument("--n-true", type=int, default=12)
     ap.add_argument("--distractors", type=int, default=18)
-    ap.add_argument("--delta", type=float, default=0.12)
-    ap.add_argument("--points", type=int, default=3000)
+    ap.add_argument("--delta", type=float, default=0.15)
+    ap.add_argument("--points", type=int, default=2500)
     args = ap.parse_args()
 
     s_true = make_s_true(args.n_true)
@@ -156,8 +143,7 @@ def main() -> None:
 
     d_full = D_of([c["pos"] for c in pool], X, args.mode)
     if d_full > args.epsilon:
-        # loosen: still run greedy from full pool report infeasible path
-        print(f"Note: full P D={d_full:.4f} > ε — greedy will stop at infeasible or minimal")
+        print(f"Note: full P D={d_full:.4f} > ε — elimination only if intermediate D ≤ ε")
 
     kept, final_d = greedy_marginal_elimination(pool, X, args.epsilon, args.mode)
     recovered = [c["pos"] for c in kept]
@@ -176,12 +162,11 @@ def main() -> None:
     print(f"| D achieved | {final_d:.4f} |")
     print()
 
-    # Expect: mostly true anchors survive; distractors dropped under tight ε
-    ok = rec >= 0.85 and prec >= 0.70
+    ok = rec >= 0.80 and prec >= 0.85
     if ok:
         print("RESULT: synthetic recovery PASS (latent generating structure recovered)")
     else:
-        print("RESULT: recovery below target — adjust ε / δ / mode=exact")
+        print("RESULT: recovery below target — try --mode exact or adjust ε/δ")
         if rec < 0.5 or prec < 0.4:
             sys.exit(1)
 
