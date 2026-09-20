@@ -2,7 +2,7 @@
 
 **P-LOD: Progressive Strong-Entanglement Point Array with Weak-Entanglement Emergence Encoding — A Structural State Representation and Progressive Realization Protocol.**
 
-**Status:** Prior Art Protocol Specification v1.0/v1.1 & Normative Reference Implementation.  
+**Status:** Prior Art Protocol Specification v1.0/v1.1 & Normative Reference Implementation (v0.1.0 milestone).  
 **Byte order:** **Little-Endian**.  
 **License:** MIT · [DEFENSIVE_PUBLICATION.md](DEFENSIVE_PUBLICATION.md)
 
@@ -25,8 +25,6 @@ $$
 S^* = \arg\min_{S \subseteq X} \lvert S\rvert \quad \text{subject to} \quad D\bigl(X, G(S)\bigr) \le \epsilon
 $$
 
-where:
-
 | Symbol | Meaning |
 |--------|--------|
 | $\lvert S\rvert$ | Cardinality of the independent SE node set |
@@ -34,11 +32,9 @@ where:
 | $D(\cdot,\cdot)$ | Normalized topological distortion (e.g. symmetric Chamfer / bbox diagonal) |
 | $\epsilon \ge 0$ | Target reconstruction tolerance |
 
-This is the information-theoretic statement behind the informal 「王」-character 9-point example: store only non-degenerate topological anchors; reconstruct fillable structure at read time.
-
 ### Node removal loss & `causal_depth`
 
-To decide whether $p_i \in X$ is a non-degenerate structural anchor, define leave-one-out removal loss:
+Leave-one-out removal loss:
 
 $$
 \Delta E_i = D\bigl(X, G(S \setminus \{p_i\})\bigr) - D\bigl(X, G(S)\bigr)
@@ -50,12 +46,57 @@ $$
 C_i = \mathrm{round}\left( 255 \cdot \mathrm{clamp}\left( \frac{\Delta E_i}{\max_j(\Delta E_j)}, 0, 1 \right) \right)
 $$
 
-- $C_i \ge 200$ → **Causal Anchor** (essential degree of freedom)
-- low $C_i$ → emergent redundancy synthesized by $G(S)$ at runtime, not serialized on the wire
+- $C_i \ge 200$ → **High-Causal-Depth Anchor** (relativized rank of structural impact under ablation)
+- low $C_i$ → emergent redundancy synthesized by $G(S)$ at runtime, not necessarily serialized on the wire
 
-Practical extractors (see `examples/horizon_compression_demo.py`) approximate $S^*$ by ablation-ranked candidates; exhaustive combinatorial search is NP-hard.
+Practical extractors approximate $S^*$ by ablation-ranked candidates; exhaustive search is NP-hard.
 
-**Structural isomorphism note.** The volume→surface collapse of classical holographic ideas is treated here as an **information-structural isomorphism** (high-entropy bulk → low-cardinality skeleton), not as a claim of quantum gravity physics.
+**Structural isomorphism note.** Volume→surface collapse is an **information-structural isomorphism**, not a claim of quantum gravity physics.
+
+### Strict Definition: $\epsilon$-Essential Nodes and Structural Redundancy Throttle
+
+Relative ranking ($C_i$) is not the same as absolute irreplaceability. P-LOD separates the two.
+
+#### 1. $\epsilon$-Essential Degree of Freedom
+
+Given $X$, $G$, $D$, and tolerance $\epsilon \ge 0$, a candidate $p_i \in S$ is **$\epsilon$-essential** iff its removal forces reconstruction error to breach $\epsilon$:
+
+$$
+p_i \text{ is } \epsilon\text{-essential} \iff \min_{\hat{S} \subseteq (S \setminus \{p_i\})} D\bigl(X, G(\hat{S})\bigr) > \epsilon
+$$
+
+| Term | Meaning |
+|------|--------|
+| **High-Causal-Depth Anchor** ($C_i \ge 200$) | *Relative* impact rank under $\Delta E_i$ |
+| **$\epsilon$-Essential Node** | *Absolute* irreducible degree of freedom for a chosen $\epsilon$ |
+
+A node may be high-$C_i$ yet not $\epsilon$-essential for a loose $\epsilon$; conversely, under a tight $\epsilon$, more nodes become $\epsilon$-essential.
+
+#### 2. Structural Redundancy Throttle
+
+Non-$\epsilon$-essential candidates (under a fixed extractor / $G$ / $\epsilon$):
+
+$$
+\mathcal{R}_\epsilon(X) = \bigl\{ p_j \in X \;\big|\; D\bigl(X, G(X \setminus \{p_j\})\bigr) \le \epsilon \bigr\}
+$$
+
+Idealized wire payload (conceptual throttle; practical codecs emit ranked top-$k$ SE tables):
+
+$$
+S^* \approx X \setminus \mathcal{R}_\epsilon(X)
+$$
+
+Redundant nodes are suppressed on the wire; the decoder reconstructs via $G(S^*)$.
+
+#### 3. Adversarial Degeneracy Criterion (Zero-Causal Noise Limit)
+
+Under pure unstructured noise $W \sim \mathcal{N}(\mu, \Sigma)$ (or i.i.d. uniform scatter without topology):
+
+$$
+\forall p_i \in W,\quad \Delta E_i \to 0 \quad\implies\quad C_i \approx 0
+$$
+
+and typically $\nexists\, p_i \in W$ that is $\epsilon$-essential for moderate $\epsilon$. Reference: `examples/eval_adversarial_noise.py`.
 
 ---
 
@@ -95,11 +136,11 @@ No Edge Table on the wire. For **`plod.ref.linear_spline.v1`**: sort by `node_id
 
 ### Version Compatibility Matrix
 
-| VERSION | Wire name | Allowed payload | Forbidden |
-|---------|-----------|-----------------|-----------|
-| `0x10` | **v1.0** | Header + Core or Embodied SE Node Table + CRC | Constraint Table; Extended Meta; flags bit0/bit2 must be 0 |
-| `0x11` | **v1.1** | Full: Core/Embodied, optional Extended Meta, optional Constraint Table | — |
-| other | — | — | **MUST reject** with `ProtocolError` |
+| VERSION | Wire name | Allowed | Forbidden |
+|---------|-----------|---------|-----------|
+| `0x10` | v1.0 | Header + Core/Embodied nodes + CRC | Constraint Table; Extended Meta |
+| `0x11` | v1.1 | Full optional CT + Meta | — |
+| other | — | — | **MUST** `ProtocolError` |
 
 ---
 
@@ -107,11 +148,11 @@ No Edge Table on the wire. For **`plod.ref.linear_spline.v1`**: sort by `node_id
 
 | Offset | Size | Field | Type |
 |-------:|-----:|-------|------|
-| 0–1 | 2 | `node_id` | uint16 (`0..65534`; `0xFFFF` forbidden) |
+| 0–1 | 2 | `node_id` | uint16 (`0..65534`) |
 | 2 | 1 | `level` | uint8 (`1..3`) |
 | 3 | 1 | `type_code` | uint8 |
-| 4–15 | 12 | `x, y, z` | float32 × 3 |
-| 16–18 | 3 | `r, g, b` | uint8 × 3 |
+| 4–15 | 12 | `x,y,z` | float32 × 3 |
+| 16–18 | 3 | `r,g,b` | uint8 × 3 |
 | 19 | 1 | `node_flags` | uint8 |
 | 20–23 | 4 | `param0` | float32 |
 
@@ -121,47 +162,37 @@ No Edge Table on the wire. For **`plod.ref.linear_spline.v1`**: sort by `node_id
 
 | Offset | Size | Field | Type |
 |-------:|-----:|-------|------|
-| 0–1 | 2 | `node_id` | uint16 (`0..65534`) |
-| 2 | 1 | `risk_state` | `0=SAFE`, `1=WATCH`, `2=CRITICAL` |
+| 0–1 | 2 | `node_id` | uint16 |
+| 2 | 1 | `risk_state` | 0=SAFE, 1=WATCH, 2=CRITICAL |
 | 3 | 1 | `sub_system` | uint8 |
-| 4–15 | 12 | `pos_x,y,z` | float32 × 3 |
-| 16–27 | 12 | `vel_x,y,z` | float32 × 3 |
+| 4–15 | 12 | `pos` | float32 × 3 |
+| 16–27 | 12 | `vel` | float32 × 3 |
 | 28–31 | 4 | `phase` | float32 |
 
 ---
 
 ## 5. Extended Meta (8 bytes) — v1.1 only
 
-| Offset | Size | Field |
-|-------:|-----:|-------|
-| 0–3 | 4 | `resonance_freq` float32 |
-| 4 | 1 | `causal_depth` uint8 |
-| 5–7 | 3 | pad = 0 |
+| Offset | Size | Field | Notes |
+|-------:|-----:|-------|-------|
+| 0–3 | 4 | `resonance_freq` | **Profile-Defined Placeholder / Demo Parameter** |
+| 4 | 1 | `causal_depth` | $C_i$ as defined in §0 |
+| 5–7 | 3 | pad | must be 0 |
+
+**`resonance_freq` semantics:** The baseline reference profiles (`plod.ref.linear_spline.v1` / v2) **do not** require extracting a physical vacuum or modal resonance from point clouds. The field exists for (1) fixed Extended Meta layout, (2) forward-compatible profile experiments, and (3) demo numerical fill. Third-party profiles **MAY** assign domain-specific meaning; until then treat values as **opaque placeholders**, not measured physics.
 
 ---
 
 ## 6. Constraint Table — v1.1 only
 
-`uint16 count` + `count × 16` byte entries.
+`uint16 count` + `count × 16` byte entries. Global/N/A = `0xFFFF`.
 
-| Offset | Size | Field |
-|-------:|-----:|-------|
-| 0 | 1 | `constraint_type` |
-| 1 | 1 | `cflags` (0) |
-| 2–3 | 2 | `node_a` (`0xFFFF` = global/N/A) |
-| 4–5 | 2 | `node_b` |
-| 6–9 | 4 | `param0` float32 |
-| 10–13 | 4 | `param1` float32 |
-| 14–15 | 2 | reserved (0) |
-
-### Constraint type codes & `param0` / `param1` meanings
-
-| Type | Code | `param0` | `param1` | Profile handling |
-|------|------|----------|----------|------------------|
-| **Distance** | `0x01` | Max distance A–B | Reserved (0) | **v2** enforced under constrained/high_fidelity; **v1** stored |
-| **Boundary / Safety** | `0x02` | Max radius / half-extent | Reserved (0) | **v2** enforced; **v1** stored |
-| **Temporal Link** | `0x03` | Max Δt / causal lag | Optional weight | **Pass-through** in v1/v2 ref |
-| **Symmetry** | `0x04` | Plane/axis parameter | Optional axis | **Pass-through** in v1/v2 ref |
+| Type | Code | Profile handling |
+|------|------|------------------|
+| Distance | `0x01` | v2 may enforce; v1 stores |
+| Boundary | `0x02` | v2 may enforce; v1 stores |
+| Temporal Link | `0x03` | Pass-through in v1/v2 ref |
+| Symmetry | `0x04` | Pass-through in v1/v2 ref |
 
 ---
 
@@ -173,38 +204,30 @@ Coverage: Header + Nodes + Constraints; excludes trailing CRC. LE uint32.
 
 ## 8. Metrics
 
-| Name | Role |
-|------|------|
-| **TCS-AABB** | Containment **proxy** — emerged samples inside expanded SE AABB |
-| **RFS** | `1 - min(1, CD/bbox_diag)` |
-
-Full compliance = Edge validity + Constraint compliance + Sample coverage (v1: $t \in \{0.25,0.50,0.75\}$).
+**TCS-AABB** = containment proxy. **RFS** = `1 - min(1, CD/bbox_diag)`.  
+Full compliance = edge validity + constraint compliance + sample coverage.
 
 ---
 
 ## 9. Security
 
-Unique `node_id` ∈ `0..65534`; finite floats; no silent truncation; reject unknown VERSION / bad CRC / trailing garbage.
+Unique `node_id`; finite floats; no silent truncation; reject unknown VERSION / bad CRC / trailing garbage.
 
 ---
 
 ## 10. Profiles & CLI
 
-| Profile | Role |
-|---------|------|
-| **`plod.ref.linear_spline.v1`** | Normative frozen baseline |
-| `plod.ref.linear_spline.v2` | Experimental budgets / jitter / Distance+Boundary |
-
 ```bash
 python examples/reference_emergence_engine.py --profile v1
 python examples/eval_rate_distortion.py
+python examples/eval_adversarial_noise.py
 ```
 
 ---
 
 ## 11. Future Extension Strategy (v1.2 / v2.0+)
 
-Reserved FLAGS bits 3–7; optional **TLV** sections after Constraint Table; new constraint codes ≥ `0x10` pass-through; VERSION bumps only on incompatible layouts.
+Reserved FLAGS bits 3–7; optional TLV after Constraint Table; new constraint codes ≥ `0x10` pass-through.
 
 ---
 
