@@ -7,7 +7,7 @@ A stable plateau for larger K implies N* is driven by structure, not by cap.
 
 Usage:
   python examples/eval_pool_sufficiency.py
-  python examples/eval_pool_sufficiency.py --epsilon 0.12 --mode fast
+  python examples/eval_pool_sufficiency.py --epsilon 0.15 --mode fast
 """
 
 from __future__ import annotations
@@ -22,14 +22,15 @@ if str(_HERE) not in sys.path:
 
 from horizon_compression_demo import extract_se_epsilon_minimal, generate_volume
 
-K_GRID = (16, 24, 32, 40, 48, 64, 80)
+# Keep grid modest: greedy is O(|P|^2 · cost(D))
+K_GRID = (12, 16, 20, 24, 28, 32, 40)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--epsilon", type=float, default=0.12)
+    ap.add_argument("--epsilon", type=float, default=0.15)
     ap.add_argument("--mode", choices=("exact", "fast"), default="fast")
-    ap.add_argument("--points", type=int, default=4000)
+    ap.add_argument("--points", type=int, default=2500)
     args = ap.parse_args()
 
     cloud = generate_volume(args.points, seed=42)
@@ -59,7 +60,6 @@ def main() -> None:
         rows.append((k, n_star, d, st))
 
     print()
-    # crude plateau: last 3 finite N* within ±2 of their median
     sizes = [n for _, n, _, st in rows if st == "EPSILON_MINIMAL"]
     if len(sizes) >= 3:
         tail = sizes[-3:]
