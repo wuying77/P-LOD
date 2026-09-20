@@ -5,7 +5,7 @@ from .spec.models import Constraint, PLODFrame, SENode
 
 try:
     from .emergence.reference import emerge, emerge_v1
-except Exception:  # pragma: no cover - partial checkout
+except Exception:  # pragma: no cover
     def emerge_v1(nodes):  # type: ignore
         return []
 
