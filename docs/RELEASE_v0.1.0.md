@@ -16,8 +16,8 @@ $$
 |------|----------------|
 | **Theory** | Spec §0: $S^*$, node ablation $\Delta E_i$, quantized `causal_depth` |
 | **Wire** | Spec v1.1: 8B header, Core 24B / Embodied 32B, Constraints, CRC-32/ISO-HDLC |
-| **Codec** | Sole SoT: `examples/plod_spec_codec.py` (strict range / NaN / unique id) |
-| **Emergence** | `plod.ref.linear_spline.v1` frozen baseline; v2 experimental |
+| **Codec** | Normative SoT: `src/plod/spec/codec.py`; API `plod.encode_frame` / `plod.decode_frame`; compat `examples/plod_spec_codec.py` |
+| **Emergence** | `plod.ref.linear_spline.v1` frozen baseline; `v2` experimental placeholder (algorithm currently ≡ v1) |
 | **Evidence** | Rate–distortion sweep on 10 000-pt volume |
 | **CI** | Python 3.10 / 3.11 / 3.12 compliance matrix |
 
@@ -28,35 +28,32 @@ $$
 Ablation-ranked SE → `plod.ref.linear_spline.v1` reconstruction:
 
 | N_SE | SE-Frame | Compression | D/diag | RFS |
-|-----:|---------:|------------:|-------:|----:|
+|-----:|---------:|------------:|------:|----:|
 | 4 | 172 B | **1396×** | 0.077 | 0.923 |
 | 16 | 652 B | 368× | 0.052 | 0.948 |
 | 64 | 2572 B | 93× | 0.035 | 0.965 |
 | 128 | 4812 B | 50× | 0.030 | 0.970 |
 
-Curve: [`docs/rate_distortion_curve.svg`](rate_distortion_curve.svg)
-
-Reproduce:
-
-```bash
-python examples/eval_rate_distortion.py
-```
+See [rate_distortion_curve.svg](rate_distortion_curve.svg).
 
 ---
 
-## Quick start
+## Quick verify
 
 ```bash
+export PYTHONPATH=src
+python tests/materialize_vectors.py
+python tests/run_compliance_tests.py
 python examples/plod_spec_codec.py --demo
 python examples/reference_emergence_engine.py --profile v1
-python examples/horizon_compression_demo.py
-python tests/run_compliance_tests.py
 ```
 
 ---
 
-## License & Prior Art
+## Credits
 
-MIT · Defensive publication — see [`DEFENSIVE_PUBLICATION.md`](DEFENSIVE_PUBLICATION.md).
+Lead Architect: **wuying77** · Planning: **Gemini** · Editing: **Grok**
 
-**Credits:** Lead Architect **wuying77** · Planning **Gemini** · Editing **Grok**
+## License
+
+MIT © 2026 wuying77 & P-LOD Contributors

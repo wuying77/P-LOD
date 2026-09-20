@@ -64,11 +64,14 @@ print(f"P-LOD active — reconstructed {len(emerged)} spatial samples from {len(
 
 ```bash
 export PYTHONPATH=src
+python tests/materialize_vectors.py
 python examples/plod_spec_codec.py --demo
 python examples/reference_emergence_engine.py --profile v1
 python examples/horizon_compression_demo.py
 python tests/run_compliance_tests.py
 ```
+
+> **Profile v2:** `plod.ref.linear_spline.v2` is an experimental placeholder (currently identical to normative v1).
 
 ---
 
