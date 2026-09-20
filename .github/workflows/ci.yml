@@ -18,13 +18,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Generate golden vectors
-        run: python tests/generate_vectors.py
-      - name: Compliance tests
+
+      - name: Materialize static golden vectors from committed *.plod.b64
+        run: python tests/materialize_vectors.py
+
+      - name: Run RFC Compliance Tests against Static Golden Vectors
         run: python tests/run_compliance_tests.py
+
+      - name: Verify Deterministic Vector Generation Integrity
+        run: |
+          python tests/generate_vectors.py --output /tmp/test_vectors
+          diff -ru tests/vectors /tmp/test_vectors
+
       - name: Codec unit tests (NaN / duplicate / truncated)
         run: python examples/test_plod_spec_codec.py
+
       - name: Codec demo
         run: python examples/plod_spec_codec.py --demo
+
       - name: Reference engine v1
         run: python examples/reference_emergence_engine.py --profile v1
