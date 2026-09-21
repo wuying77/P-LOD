@@ -16,7 +16,11 @@ def materialize(vec_dir: Path) -> None:
     if not files:
         raise SystemExit(f"No *.plod.b64 files in {vec_dir}")
     for b64_path in files:
-        raw = base64.b64decode(b64_path.read_text().strip())
+        text = b64_path.read_text().strip()
+        try:
+            raw = base64.b64decode(text, validate=True)
+        except Exception as e:
+            raise SystemExit(f"Invalid base64 in {b64_path.name}: {e}") from e
         out = Path(str(b64_path)[: -len(".b64")])
         out.write_bytes(raw)
         print(f"  {out.name}: {len(raw)} bytes")

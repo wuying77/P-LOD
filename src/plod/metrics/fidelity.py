@@ -29,6 +29,11 @@ def chamfer_distance(
 def compute_symmetric_chamfer_distance(
     a: Sequence[Point], b: Sequence[Point], sample_a: int = 400, sample_b: int = 400
 ) -> float:
+    """Symmetric Chamfer distance between two point sets.
+
+    Uses a fixed-point sampled symmetric Chamfer estimator with a max-points
+    sample limit for numerical stability.
+    """
     return chamfer_distance(a, b, sample_a=sample_a, sample_b=sample_b)
 
 
