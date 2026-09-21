@@ -6,6 +6,8 @@ Normative package module: ``plod.spec.codec``.
 
 Strict encoding: no silent &0xFF truncation — out-of-range values raise ProtocolError.
 node_id 0..65534 only (0xFFFF reserved as GLOBAL_NA).
+Canonical wire order: nodes sorted by node_id; constraints sorted by
+(ctype, node_a, node_b, param0, param1) so semantic equality ⇒ byte equality.
 """
 
 from __future__ import annotations
@@ -142,7 +144,11 @@ def encode_frame(
         raise ProtocolError("MAX_SE_NODES exceeded")
     _assert_unique_node_ids(nodes)
 
+    # Canonical wire order: semantic equality ⇒ byte equality
+    nodes = sorted(nodes, key=lambda n: n.node_id)
     cons = list(constraints or [])
+    cons.sort(key=lambda c: (c.ctype, c.node_a, c.node_b, c.param0, c.param1))
+
     if version == VERSION_V10 and (cons or extended_meta):
         raise ProtocolError("v1.0 forbids Constraint Table and Extended Meta")
     if len(cons) > MAX_CONSTRAINTS:
