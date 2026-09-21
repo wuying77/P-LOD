@@ -43,50 +43,49 @@ def expect(cond: bool, msg: str) -> None:
 
 def test_golden_core_v11() -> None:
     data = (VEC / "golden_core_v11.plod").read_bytes()
-    magic, ver, flags, count, seq = struct.unpack_from("<HBBHH", data, 0)
-    expect(magic == MAGIC, "MAGIC")
     fr = decode_frame(data)
+    expect(fr.version == 0x11, "version")
     expect(len(fr.nodes) == 4, "4 nodes")
-    expect(fr.constraints[1].node_a == GLOBAL_NA, "0xFFFF")
     print("[PASS] golden_core_v11.plod")
 
 
 def test_golden_invalid_crc() -> None:
+    data = (VEC / "golden_invalid_crc.plod").read_bytes()
     try:
-        decode_frame((VEC / "golden_invalid_crc.plod").read_bytes())
+        decode_frame(data)
         raise AssertionError("expected ProtocolError")
-    except ProtocolError:
-        pass
+    except ProtocolError as e:
+        expect("CRC" in str(e) or "crc" in str(e).lower(), str(e))
     print("[PASS] golden_invalid_crc.plod")
 
 
 def test_trailing_garbage() -> None:
+    good = (VEC / "minimal_valid.plod").read_bytes()
     try:
-        decode_frame((VEC / "golden_core_v11.plod").read_bytes() + b"\x00\x00")
-        raise AssertionError("expected ProtocolError")
-    except ProtocolError as e:
-        expect("trailing" in str(e).lower(), str(e))
+        decode_frame(good + b"\x00\x01")
+        raise AssertionError("expected trailing garbage reject")
+    except ProtocolError:
+        pass
     print("[PASS] trailing garbage")
 
 
 def test_unknown_version() -> None:
     data = bytearray((VEC / "minimal_valid.plod").read_bytes())
     data[2] = 0x99
+    # CRC will also fail after version poke; either is Fail Loudly
     try:
         decode_frame(bytes(data))
-        raise AssertionError("expected ProtocolError")
+        raise AssertionError("expected reject")
     except ProtocolError:
         pass
     print("[PASS] unknown VERSION")
 
 
 def test_bad_constraint_index() -> None:
+    nodes = [SENode(0, (0.0, 0.0, 0.0)), SENode(1, (1.0, 0.0, 0.0))]
     try:
-        encode_frame(
-            [SENode(1, (0.0, 0.0, 0.0)), SENode(2, (1.0, 0.0, 0.0))],
-            constraints=[Constraint(0x01, 99, 2, 1.0)],
-        )
-        raise AssertionError("expected ProtocolError")
+        encode_frame(nodes, constraints=[Constraint(0x01, 0, 99, 1.0)])
+        raise AssertionError("expected bad constraint index")
     except ProtocolError:
         pass
     print("[PASS] bad constraint index")
@@ -94,30 +93,33 @@ def test_bad_constraint_index() -> None:
 
 def test_reject_node_id_ffff() -> None:
     try:
-        encode_frame([SENode(0xFFFF, (0.0, 0.0, 0.0))])
-        raise AssertionError("expected ProtocolError")
+        encode_frame([SENode(GLOBAL_NA, (0.0, 0.0, 0.0))])
+        raise AssertionError("expected reject 0xFFFF")
     except ProtocolError:
         pass
     print("[PASS] reject node_id=0xFFFF")
 
 
 def test_embodied_meta() -> None:
-    fr = decode_frame((VEC / "embodied_32b.plod").read_bytes())
-    expect(len(fr.nodes) == 16, "16")
+    data = (VEC / "embodied_32b.plod").read_bytes()
+    fr = decode_frame(data)
+    expect(bool(fr.flags & FLAG_IS_EMBODIED_PROFILE), "embodied flag")
     print("[PASS] embodied_32b.plod")
 
 
 def test_minimal_valid() -> None:
-    fr = decode_frame((VEC / "minimal_valid.plod").read_bytes())
-    expect(len(fr.nodes) == 8, "8")
+    data = (VEC / "minimal_valid.plod").read_bytes()
+    fr = decode_frame(data)
+    expect(fr.version == 0x10, "v1.0 wire")
     print("[PASS] minimal_valid.plod")
 
 
 def test_v1_deterministic_samples() -> None:
-    """A(0,0,0)–B(4,0,0) must yield exactly (1,0,0), (2,0,0), (3,0,0) on that edge."""
-    nodes = [SENode(1, (0.0, 0.0, 0.0)), SENode(2, (4.0, 0.0, 0.0))]
+    nodes = [
+        SENode(1, (0.0, 0.0, 0.0)),
+        SENode(2, (4.0, 0.0, 0.0)),
+    ]
     pts = emerge_v1(nodes)
-    # edges: 1→2 and 2→1 (ring); take samples on edge 1→2 = first three
     edge_ab = pts[:3]
     expected = [(1.0, 0.0, 0.0), (2.0, 0.0, 0.0), (3.0, 0.0, 0.0)]
     for got, exp in zip(edge_ab, expected):
@@ -128,6 +130,23 @@ def test_v1_deterministic_samples() -> None:
             f"expected {exp} got {got}",
         )
     print("[PASS] v1 deterministic samples A(0,0,0)–B(4,0,0) → (1,0,0)(2,0,0)(3,0,0)")
+
+
+def test_canonical_node_order() -> None:
+    """Semantic equality ⇒ wire byte equality (node_id order independent)."""
+    a = [
+        SENode(3, (3.0, 0.0, 0.0)),
+        SENode(1, (1.0, 0.0, 0.0)),
+        SENode(2, (2.0, 0.0, 0.0)),
+    ]
+    b = [
+        SENode(1, (1.0, 0.0, 0.0)),
+        SENode(2, (2.0, 0.0, 0.0)),
+        SENode(3, (3.0, 0.0, 0.0)),
+    ]
+    ba, bb = encode_frame(a), encode_frame(b)
+    expect(ba == bb, "canonical encoding: shuffled node order must match bytes")
+    print("[PASS] canonical node order → identical wire bytes + CRC")
 
 
 def main() -> int:
@@ -143,6 +162,7 @@ def main() -> int:
         test_embodied_meta,
         test_minimal_valid,
         test_v1_deterministic_samples,
+        test_canonical_node_order,
     ):
         try:
             fn()

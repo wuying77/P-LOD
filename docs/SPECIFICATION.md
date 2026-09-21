@@ -75,6 +75,8 @@ Ablation-derived **structural sensitivity index** under normative $G$ — local 
 
 Header · Core 24B / Embodied 32B · Extended Meta (`resonance_freq` placeholder) · Constraints · CRC-32/ISO-HDLC · TCS-AABB / RFS.
 
+**Canonical encoding:** nodes are written in ascending `node_id` order; constraints sorted by `(ctype, node_a, node_b, param0, param1)`. Semantic equality implies byte equality.
+
 ```bash
 python examples/horizon_compression_demo.py --ablation-mode exact --epsilon 0.10
 python examples/eval_synthetic_ground_truth.py --mode exact --epsilon 0.08
@@ -84,3 +86,35 @@ python tests/run_compliance_tests.py
 ---
 
 *P-LOD Spec v1.1 — emergence-closed $D_{\mathrm{sym}}$. Prior Art under MIT.*
+
+---
+
+## Appendix A — Security Envelope (Optional, Non-Normative for Core)
+
+**Core Protocol (Wire v1.1)** and **Security Envelope (AEAD)** are strictly layered:
+
+| Layer | Module | Role |
+|-------|--------|------|
+| Core | `src/plod/spec/codec.py` | Deterministic canonical SE-Frame + CRC-32 integrity |
+| Security | `src/plod/security/envelope.py` (optional) | Outer AEAD (AES-256-GCM); confidentiality + authenticity |
+
+### Rules
+
+1. **Core stays pure:** `encode_frame` / `decode_frame` never take keys, nonces, or tags. Same SE set ⇒ same wire bytes (canonical `node_id` order).
+2. **Envelope is outer only:**
+
+```text
+SE Nodes → encode_frame() → Core Plain Frame
+                              │ pack_security_envelope(key)
+                              ▼
+                         PLSE Envelope (nonce + ciphertext + tag)
+```
+
+3. **Failure mode isolation:**
+   - Format: strict Base64 (`validate=True`) on vector sidecars
+   - Transport: CRC-32 → `ProtocolError`
+   - Crypto: AEAD tag failure → `SecurityError` (never silent accept)
+
+4. **Key rotation:** `key_id` in the PLSE header selects application keys; Core frames remain content-addressable without keys.
+
+See [SECURITY_ENVELOPE.md](SECURITY_ENVELOPE.md) (branch `feature/security-envelope` until merged).
