@@ -38,3 +38,48 @@ jobs:
 
       - name: Reference engine v1
         run: python examples/reference_emergence_engine.py --profile v1
+
+  # Installed-Wheel Compliance — source green ≠ wheel green
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Install wheel in clean venv and smoke-test API
+        run: |
+          python -m venv /tmp/plod_wheel_ci
+          # shellcheck disable=SC1091
+          source /tmp/plod_wheel_ci/bin/activate
+          pip install --upgrade pip
+          pip install dist/*.whl
+          python -c "import plod; assert plod.__version__ == '0.1.1', plod.__version__; print('version', plod.__version__)"
+          python -c "
+from plod import encode_frame, decode_frame, emerge, SENode
+nodes = [SENode(node_id=2, pos=(1.0, 0.0, 0.0)), SENode(node_id=1, pos=(0.0, 0.0, 0.0))]
+f1 = encode_frame(nodes)
+f2 = encode_frame(list(reversed(nodes)))
+assert f1 == f2, 'canonical encoding failed in installed wheel'
+assert len(decode_frame(f1).nodes) == 2
+assert emerge(decode_frame(f1).nodes, profile='v1')
+print('installed-wheel API smoke PASS')
+"
+
+      - name: Materialize golden vectors
+        run: python tests/materialize_vectors.py
+
+      - name: Compliance tests against installed package (not src/)
+        run: |
+          # shellcheck disable=SC1091
+          source /tmp/plod_wheel_ci/bin/activate
+          # Prefer site-packages plod; examples/ only as thin re-export names
+          export PLOD_FORCE_INSTALLED=1
+          export PYTHONPATH="${GITHUB_WORKSPACE}/examples"
+          python tests/run_compliance_tests.py
